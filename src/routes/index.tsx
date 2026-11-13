@@ -339,7 +339,7 @@ function ReturDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                 <span className="font-semibold">{it.name} <span className="text-sm font-normal">({it.qty} {it.unit})</span></span>
                 <div className="flex gap-1">
                   <button onClick={() => { actions.retur(it.productId, it.factor, it.price, `Retur ${it.name}`); chime(); toast.success(`Retur 1 ${it.unit} ${it.name}. Kembalikan ${rp(it.price)}`); }} className="rounded-lg bg-destructive/10 px-3 py-2 text-sm font-bold text-destructive">Retur 1</button>
-                  <button onClick={() => { actions.retur(it.productId, 0, 0, ""); chime(); toast.success(`Tukar ${it.name} dengan barang yang sama — stok tidak berubah`); }} className="rounded-lg bg-secondary px-3 py-2 text-sm font-bold">Tukar</button>
+                  <button onClick={() => { actions.retur(it.productId, -it.factor, 0, ""); chime(); toast.success(`Tukar ${it.name} dengan yang baru — barang rusak dicatat keluar stok`); }} className="rounded-lg bg-secondary px-3 py-2 text-sm font-bold">Tukar</button>
                 </div>
               </div>
             ))}
