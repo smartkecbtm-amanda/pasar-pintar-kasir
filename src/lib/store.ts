@@ -201,6 +201,7 @@ export const actions = {
     });
   },
   retur(productId: string, qtyBase: number, refund: number, note: string) {
+    requireLocalRole(["Supervisor", "Pemilik"]);
     setState((s) => ({ products: deduct(s.products, [{ productId, qty: qtyBase }], 1), cash: refund ? addCash(s, -refund, "retur", note) : s.cash }));
   },
   hold(label: string, items: CartItem[]) { setState((s) => { if (s.held.length >= 5) throw new Error("Maksimal 5 keranjang diparkir"); return { held: [...s.held, { id: uid(), label, ts: Date.now(), items }] }; }); },
@@ -210,14 +211,16 @@ export const actions = {
   closeShift(counted: number, expected: number) {
     setState((s) => { const sh = activeShift(s); if (!sh || currentEmployee(s)?.id !== sh.cashierId) throw new Error("Hanya penanggung jawab dapat menutup laci"); if (s.held.length) throw new Error("Selesaikan keranjang diparkir dahulu"); return { shifts: s.shifts.map((x) => (x.closedAt ? x : { ...x, closedAt: Date.now(), counted, expected: expectedCash(s, x) })) }; });
   },
-  saveProduct(pr: Product) { setState((s) => ({ products: s.products.some((x) => x.id === pr.id) ? s.products.map((x) => (x.id === pr.id ? pr : x)) : [...s.products, pr] })); },
-  deleteProduct(id: string) { setState((s) => ({ products: s.products.filter((x) => x.id !== id) })); },
+  saveProduct(pr: Product) { requireLocalRole(["Pemilik"]); setState((s) => ({ products: s.products.some((x) => x.id === pr.id) ? s.products.map((x) => (x.id === pr.id ? pr : x)) : [...s.products, { ...pr, createdAt: Date.now() }] })); },
+  deleteProduct(id: string) { requireLocalRole(["Pemilik"]); setState((s) => ({ products: s.products.filter((x) => x.id !== id) })); },
   receive(productId: string, qtyBase: number, totalCost: number, tempo?: { supplierId: string; days: number }) {
+    requireLocalRole(["Supervisor", "Pemilik"]);
     setState((s) => {
       const products = s.products.map((x) => x.id === productId ? { ...x, hpp: movingAverage(x.stock, x.hpp, qtyBase, totalCost / qtyBase), stock: x.stock + qtyBase } : x);
       const name = s.products.find((x) => x.id === productId)?.name ?? "";
-      if (tempo) return { products, payables: [...s.payables, { id: uid(), supplierId: tempo.supplierId, ts: Date.now(), due: Date.now() + tempo.days * DAY, amount: totalCost, paid: 0, note: `Kulakan ${name}` }] };
-      return { products, cash: addCash(s, -totalCost, "kulakan", `Kulakan ${name}`) };
+       const stockMoves = [...s.stockMoves, { id: uid(), ts: Date.now(), productId, qty: qtyBase, reason: "Kulakan", cashierId: currentEmployee(s)?.id }];
+       if (tempo) return { products, stockMoves, payables: [...s.payables, { id: uid(), supplierId: tempo.supplierId, ts: Date.now(), due: Date.now() + tempo.days * DAY, amount: totalCost, paid: 0, note: `Kulakan ${name}` }] };
+       return { products, stockMoves, cash: addCash(s, -totalCost, "kulakan", `Kulakan ${name}`) };
     });
   },
   payPayable(id: string, amount: number) {
@@ -242,6 +245,7 @@ export const actions = {
     setState((s) => ({ ledger: [...s.ledger, { id: uid(), customerId, ts: Date.now(), desc: "Pembayaran / cicilan", debit: 0, credit: amount }], cash: addCash(s, amount, "kasbon masuk", "Cicilan kasbon") }));
   },
   addPrive(pv: Omit<Prive, "id" | "ts">) {
+    requireLocalRole(["Pemilik"]);
     setState((s) => ({
       prive: [...s.prive, { ...pv, id: uid(), ts: Date.now() }],
        ...(pv.type === "tunai" ? { cash: addCash(s, -pv.amount, "prive", pv.note) } : pv.productId && pv.qty ? { products: deduct(s.products, [{ productId: pv.productId, qty: pv.qty }]) } : {}),
@@ -259,6 +263,10 @@ export function expectedCash(s: State, sh: Shift) {
 export function currentEmployee(s = getState()) {
   if (typeof window === "undefined") return undefined;
   return s.employees.find((e) => e.id === sessionStorage.getItem("employee") && e.active);
+}
+export function requireLocalRole(roles: Role[]) {
+  const e = currentEmployee();
+  if (!e || !roles.includes(e.role)) throw new Error("Pegawai tidak berwenang untuk tindakan ini");
 }
 export function deviceId() {
   let id = sessionStorage.getItem("device");

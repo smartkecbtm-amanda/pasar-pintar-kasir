@@ -39,9 +39,9 @@ const TABS = [
 ] as const;
 
 function Owner() {
-  useStore((s) => s.employees);
+  const employees = useStore((s) => s.employees);
   const [ok, setOk] = useState<boolean | null>(null);
-  useEffect(() => setOk(currentEmployee()?.role === "Pemilik"), []);
+  useEffect(() => setOk(currentEmployee()?.role === "Pemilik"), [employees]);
   if (ok === null) return null;
   if (!ok) return (
     <div className="min-h-dvh bg-background">

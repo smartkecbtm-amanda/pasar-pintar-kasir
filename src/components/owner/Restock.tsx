@@ -10,7 +10,7 @@ export function Restock() {
   const s = useStore((x) => x);
   const items = s.products.filter((p) => !p.digital && !p.bundle);
   const [pid, setPid] = useState(items[0]?.id ?? "");
-  const p = items.find((x) => x.id === pid)!;
+  const p = items.find((x) => x.id === pid);
   const [unitIdx, setUnitIdx] = useState(0);
   const [qty, setQty] = useState("1");
   const [cost, setCost] = useState("");

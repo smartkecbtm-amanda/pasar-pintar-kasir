@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { EmployeeAccess } from "@/components/pos/EmployeeAccess";
 import { currentEmployee, type Payment } from "@/lib/store";
 import { wholesalePrice } from "@/lib/operations";
+import { ShiftTab } from "@/components/owner/Shift";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -34,6 +35,7 @@ function Kasir() {
   const s = useStore((s) => s);
   const [employee, setEmployee] = useState<string | null>(null);
   const [access, setAccess] = useState(false);
+  const [shiftPanel, setShiftPanel] = useState(false);
   useEffect(() => { setEmployee(currentEmployee()?.id ?? null); }, [s]);
   const products = useStore((s) => s.products);
   const held = useStore((s) => s.held);
@@ -95,6 +97,7 @@ function Kasir() {
     <div className="cashier-screen flex h-dvh flex-col bg-background">
       <AppBar>
         <Button variant="secondary" onClick={() => setAccess(true)}>{employee ? s.employees.find((e) => e.id === employee)?.nickname : "Masuk Kasir"}</Button>
+        {employee && shift && <Button variant="secondary" onClick={() => setShiftPanel(true)}>Laci</Button>}
         <Button onClick={() => (currentEmployee()?.role === "Pemilik" ? navigate({ to: "/pemilik" }) : setPin(true))}
           className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
           <KeyRound className="size-4" /> Pemilik
@@ -183,6 +186,7 @@ function Kasir() {
       </div>
 
       <EmployeeAccess open={access} onClose={() => { setAccess(false); setEmployee(currentEmployee()?.id ?? null); }} />
+      <Dialog open={shiftPanel} onOpenChange={setShiftPanel}><DialogContent className="max-h-[90dvh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>Laci Bersama</DialogTitle></DialogHeader><ShiftTab /><Button variant="outline" onClick={() => { sessionStorage.removeItem("employee"); sessionStorage.removeItem("owner"); setEmployee(null); setShiftPanel(false); }}>Selesai Membantu / Keluar</Button></DialogContent></Dialog>
       <UnitDialog product={unitPick} onClose={() => setUnitPick(null)} onPick={(i) => { if (unitPick) add(unitPick, i); setUnitPick(null); }} />
       <PayDialog open={pay} onOpenChange={setPay} cart={cart} total={total} onDone={() => { setCart([]); setPay(false); scanRef.current?.focus(); }} />
       <ReturDialog open={retur} onOpenChange={setRetur} />
