@@ -22,6 +22,6 @@ export function Employees() {
       <Field label="PIN baru (4–6 digit)"><Input aria-label="PIN baru" type="password" inputMode="numeric" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value)} /></Field>
       <label className="flex items-center gap-2"><input type="checkbox" checked={edit.active} onChange={(e) => setEdit({ ...edit, active: e.target.checked })} />Aktif</label>
       <Button onClick={async () => { try { await saveEmployee(edit, pin); setEdit(null); toast.success("Pegawai disimpan"); } catch (e) { toast.error(e instanceof Error ? e.message : "Gagal menyimpan"); } }}>Simpan Pegawai</Button>
-    </>}</DialogContent>
+    </>}</DialogContent></Dialog>
   </div>;
 }

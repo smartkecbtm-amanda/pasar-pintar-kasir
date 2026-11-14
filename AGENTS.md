@@ -31,3 +31,7 @@ use the editor.
 
 ## Project rules
 - All app data lives in the browser via `src/lib/store.ts` (localStorage, useSyncExternalStore); backend not built yet by user request, so keep new features on this store.
+- Local employee PINs use browser SHA-256 fingerprints and per-tab identities solely for frontend simulation; production permissions require server validation because browser data is editable.
+- Keep deterministic restock, expiry and wholesale calculations in `src/lib/operations.ts` so business rules can be tested independently from screens.
+- Shared-drawer simulations use one store shift and cross-tab storage events; never claim cross-device synchronization until a transport exists.
+- Offline app-shell caching uses vite-plugin-pwa generateSW with the single preview-safe registration wrapper in `src/lib/pwa.ts` to avoid stale editor previews.
