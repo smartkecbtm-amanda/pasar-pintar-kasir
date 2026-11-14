@@ -13,6 +13,8 @@ import { useEffect, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { initializeOffline } from "@/lib/pwa";
+import { useStore } from "@/lib/store";
 
 function NotFoundComponent() {
   return (
@@ -125,6 +127,9 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const theme = useStore((s) => s.theme);
+  useEffect(() => { document.documentElement.classList.toggle("dark", theme === "dark"); document.documentElement.classList.toggle("contrast", theme === "contrast"); }, [theme]);
+  useEffect(() => { void initializeOffline(); }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

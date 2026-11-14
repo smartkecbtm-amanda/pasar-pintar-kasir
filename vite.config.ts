@@ -8,8 +8,13 @@
 // hosting already compresses at the edge.
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
+  vite: { plugins: [VitePWA({ strategies: "generateSW", filename: "sw.js", injectRegister: null, registerType: "autoUpdate", manifest: false, devOptions: { enabled: false }, workbox: { globPatterns: ["**/*.{js,css,png,ico,webmanifest}"], navigateFallback: null, runtimeCaching: [
+    { urlPattern: ({ request, url }) => request.mode === "navigate" && !url.pathname.startsWith("/~oauth") && !url.pathname.startsWith("/api"), handler: "NetworkFirst", options: { cacheName: "warung-pages", networkTimeoutSeconds: 4 } },
+    { urlPattern: ({ url, sameOrigin }) => sameOrigin && /\/assets\/.*-[a-zA-Z0-9_-]+\.(js|css|png|jpg|webp)$/.test(url.pathname), handler: "CacheFirst", options: { cacheName: "warung-assets", expiration: { maxEntries: 100 } } }
+  ] } })] },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
