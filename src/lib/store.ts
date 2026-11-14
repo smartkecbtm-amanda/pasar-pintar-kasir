@@ -255,3 +255,49 @@ export const actions = {
 export function expectedCash(s: State, sh: Shift) {
   return sh.opening + s.cash.filter((c) => c.shiftId === sh.id).reduce((a, c) => a + c.amount, 0);
 }
+
+export function currentEmployee(s = getState()) {
+  if (typeof window === "undefined") return undefined;
+  return s.employees.find((e) => e.id === sessionStorage.getItem("employee") && e.active);
+}
+export function deviceId() {
+  let id = sessionStorage.getItem("device");
+  if (!id) { id = crypto.randomUUID(); sessionStorage.setItem("device", id); }
+  return id;
+}
+export async function hashPin(pin: string) {
+  const bytes = new TextEncoder().encode(`warung-local-pin:${pin}`);
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+export async function loginEmployee(id: string, pin: string, roles?: Role[]) {
+  const hash = await hashPin(pin);
+  const e = getState().employees.find((x) => x.id === id && x.active && x.pinHash === hash && (!roles || roles.includes(x.role)));
+  if (!e) throw new Error("PIN salah atau pegawai tidak berwenang");
+  sessionStorage.setItem("employee", e.id);
+  if (e.role === "Pemilik") sessionStorage.setItem("owner", e.id);
+  else sessionStorage.removeItem("owner");
+  listeners.forEach((l) => l());
+  return e;
+}
+export async function saveEmployee(employee: Employee, pin: string) {
+  if (currentEmployee()?.role !== "Pemilik") throw new Error("Hanya pemilik boleh mengelola pegawai");
+  if (pin && !/^\d{4,6}$/.test(pin)) throw new Error("PIN harus 4–6 digit");
+  const pinHash = pin ? await hashPin(pin) : employee.pinHash;
+  if (!pinHash || getState().employees.some((x) => x.id !== employee.id && x.pinHash === pinHash)) throw new Error("PIN wajib unik per pegawai");
+  if (!employee.name.trim() || !employee.nickname.trim()) throw new Error("Nama dan panggilan wajib diisi");
+  setState((s) => {
+    const employees = s.employees.some((e) => e.id === employee.id) ? s.employees.map((e) => e.id === employee.id ? { ...employee, pinHash } : e) : [...s.employees, { ...employee, pinHash }];
+    if (!employees.some((e) => e.active && e.role === "Pemilik")) throw new Error("Harus ada minimal satu pemilik aktif");
+    return { employees };
+  });
+}
+export function validatePayments(s: State, total: number, payments: Payment[], customerId?: string) {
+  if (!payments.length || !Number.isFinite(total) || total < 0 || payments.some((p) => !Number.isFinite(p.amount) || p.amount < 0) || Math.abs(payments.reduce((a, p) => a + p.amount, 0) - total) > .001) throw new Error("Jumlah pembayaran harus sama dengan total belanja");
+  const debt = payments.filter((p) => p.method === "kasbon").reduce((a, p) => a + p.amount, 0);
+  if (debt) {
+    const c = s.customers.find((c) => c.id === customerId);
+    if (!c) throw new Error("Pilih pelanggan kasbon");
+    if (customerBalance(s, c.id) + debt > c.limit) throw new Error("Kasbon melebihi limit pelanggan");
+  }
+}
