@@ -11,7 +11,12 @@ import { Restock } from "@/components/owner/Restock";
 import { Consign } from "@/components/owner/Consign";
 import { Kasbon } from "@/components/owner/Kasbon";
 import { PriveTab } from "@/components/owner/Prive";
-import { resetData } from "@/lib/store";
+import { resetData, currentEmployee, useStore } from "@/lib/store";
+import { Button } from "@/components/ui/button";
+import { Employees } from "@/components/owner/Employees";
+import { SmartRestock } from "@/components/owner/SmartRestock";
+import { Settings } from "@/components/owner/Settings";
+import { Reports } from "@/components/owner/Reports";
 
 export const Route = createFileRoute("/pemilik")({
   head: () => ({
@@ -20,6 +25,8 @@ export const Route = createFileRoute("/pemilik")({
       { name: "description", content: "Laporan laba, stok, kulakan, kasbon tetangga, titipan, dan prive warung." },
       { property: "og:title", content: "Mode Pemilik — POS Warung Kelontong" },
       { property: "og:description", content: "Laporan laba, stok, kulakan, kasbon tetangga, titipan, dan prive warung." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Owner,
@@ -28,11 +35,13 @@ export const Route = createFileRoute("/pemilik")({
 const TABS = [
   ["dash", "📊 Dashboard", Dashboard], ["shift", "🗄️ Shift & Laci", ShiftTab], ["produk", "📦 Produk", Products],
   ["kulakan", "🛒 Kulakan", Restock], ["titip", "🧺 Titipan", Consign], ["kasbon", "📒 Kasbon", Kasbon], ["prive", "🏠 Prive & Kas", PriveTab],
+  ["radar", "Restok Pintar", SmartRestock], ["pegawai", "Pegawai", Employees], ["laporan", "Ekspor", Reports], ["settings", "Pengaturan", Settings],
 ] as const;
 
 function Owner() {
+  useStore((s) => s.employees);
   const [ok, setOk] = useState<boolean | null>(null);
-  useEffect(() => setOk(sessionStorage.getItem("owner") === "1"), []);
+  useEffect(() => setOk(currentEmployee()?.role === "Pemilik"), []);
   if (ok === null) return null;
   if (!ok) return (
     <div className="min-h-dvh bg-background">
@@ -44,7 +53,7 @@ function Owner() {
     <div className="min-h-dvh bg-background">
       <AppBar>
         <Link to="/" className="flex items-center gap-1 rounded-full bg-secondary px-3 py-1.5 text-sm font-semibold"><ArrowLeft className="size-4" /> Kasir</Link>
-        <button onClick={() => { sessionStorage.removeItem("owner"); setOk(false); }} className="rounded-full bg-secondary p-2" title="Kunci"><LogOut className="size-4" /></button>
+         <Button variant="secondary" size="icon" onClick={() => { sessionStorage.removeItem("owner"); sessionStorage.removeItem("employee"); setOk(false); }} title="Kunci"><LogOut className="size-4" /></Button>
       </AppBar>
       <Tabs defaultValue="dash" className="mx-auto max-w-7xl p-3 md:p-4">
         <TabsList className="mb-3 flex h-auto w-full justify-start overflow-x-auto">

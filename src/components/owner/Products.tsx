@@ -69,6 +69,12 @@ function ProductDialog({ p: init, onClose }: { p: Product; onClose: () => void }
             <Field label="HPP per satuan dasar"><Input type="number" value={Math.round(p.hpp)} onChange={(e) => set({ hpp: Number(e.target.value) })} /></Field>
           </div>
         )}
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Tanggal kedaluwarsa"><Input type="date" value={p.expiry ?? ""} onChange={(e) => set({ expiry: e.target.value })} /></Field>
+          <Field label="Lokasi kulakan"><Input value={p.market ?? ""} onChange={(e) => set({ market: e.target.value })} /></Field>
+          <Field label="Waktu tunggu pesanan (hari)"><Input type="number" min={0} value={p.leadTime ?? 2} onChange={(e) => set({ leadTime: Math.max(0, Number(e.target.value)) })} /></Field>
+          <Field label="Stok pengaman"><Input type="number" min={0} value={p.safetyStock ?? p.minStock} onChange={(e) => set({ safetyStock: Math.max(0, Number(e.target.value)) })} /></Field>
+        </div>
         <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={!!p.quick} onChange={(e) => set({ quick: e.target.checked })} /> Tampilkan sebagai tombol foto besar di kasir</label>
         <div>
           <div className="mb-1 flex items-center justify-between"><b className="text-sm">Satuan jual (multi-satuan)</b>
@@ -87,16 +93,16 @@ function ProductDialog({ p: init, onClose }: { p: Product; onClose: () => void }
           <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={isBundle} onChange={(e) => set({ bundle: e.target.checked ? [] : undefined })} /> Produk bundling / paket (stok ikut komponen)</label>
           {isBundle && (
             <div className="mt-2 space-y-1">
-              {p.bundle!.map((b, i) => (
+              {p.bundle?.map((b, i) => (
                 <div key={i} className="grid grid-cols-[1fr_90px_32px] gap-1">
-                  <select className={selectCls} value={b.productId} onChange={(e) => set({ bundle: p.bundle!.map((x, j) => (j === i ? { ...x, productId: e.target.value } : x)) })}>
+                  <select className={selectCls} value={b.productId} onChange={(e) => set({ bundle: p.bundle?.map((x, j) => (j === i ? { ...x, productId: e.target.value } : x)) })}>
                     {products.filter((x) => !x.bundle && !x.digital).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
                   </select>
-                  <Input type="number" value={b.qty} onChange={(e) => set({ bundle: p.bundle!.map((x, j) => (j === i ? { ...x, qty: Number(e.target.value) } : x)) })} />
-                  <Button size="icon" variant="ghost" onClick={() => set({ bundle: p.bundle!.filter((_, j) => j !== i) })}><Trash2 /></Button>
+                  <Input type="number" value={b.qty} onChange={(e) => set({ bundle: p.bundle?.map((x, j) => (j === i ? { ...x, qty: Number(e.target.value) } : x)) })} />
+                  <Button size="icon" variant="ghost" onClick={() => set({ bundle: p.bundle?.filter((_, j) => j !== i) })}><Trash2 /></Button>
                 </div>
               ))}
-              <Button size="sm" variant="outline" onClick={() => set({ bundle: [...p.bundle!, { productId: products[0].id, qty: 1 }] })}><Plus />Komponen</Button>
+              <Button size="sm" variant="outline" onClick={() => set({ bundle: [...(p.bundle ?? []), { productId: products[0]?.id ?? "", qty: 1 }] })}><Plus />Komponen</Button>
             </div>
           )}
         </div>
