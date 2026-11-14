@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Minus, Plus, Trash2, PauseCircle, RotateCcw, KeyRound, ScanBarcode, Wallet, X, PlayCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,6 +9,10 @@ import { PinDialog } from "@/components/pos/PinDialog";
 import { actions, activeShift, bundleStock, customerBalance, getState, productCost, useStore, type CartItem, type Product } from "@/lib/store";
 import { beep, buzz, chime, jam, num, rp } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { EmployeeAccess } from "@/components/pos/EmployeeAccess";
+import { currentEmployee, type Payment } from "@/lib/store";
+import { wholesalePrice } from "@/lib/operations";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -17,6 +21,8 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "Layar kasir ramah lansia: tombol barang besar, uang warna Rupiah, kembalian otomatis." },
       { property: "og:title", content: "Kasir — POS Warung Kelontong" },
       { property: "og:description", content: "Layar kasir ramah lansia: tombol barang besar, uang warna Rupiah, kembalian otomatis." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Kasir,
@@ -25,6 +31,10 @@ export const Route = createFileRoute("/")({
 const TABS = ["Curah", "Semua", "Digital"] as const;
 
 function Kasir() {
+  const s = useStore((s) => s);
+  const [employee, setEmployee] = useState<string | null>(null);
+  const [access, setAccess] = useState(false);
+  useEffect(() => { setEmployee(currentEmployee()?.id ?? null); }, [s]);
   const products = useStore((s) => s.products);
   const held = useStore((s) => s.held);
   const shift = useStore(activeShift);
@@ -50,6 +60,7 @@ function Kasir() {
 
   const add = (p: Product, unitIdx = 0) => {
     const u = p.units[unitIdx];
+    if (!u) return;
     const s = getState();
     const avail = p.digital ? Infinity : bundleStock(s, p);
     const inCart = cart.filter((c) => c.productId === p.id).reduce((a, c) => a + c.qty * c.factor, 0);
@@ -57,12 +68,12 @@ function Kasir() {
     beep();
     setCart((c) => {
       const i = c.findIndex((x) => x.productId === p.id && x.unit === u.name);
-      if (i >= 0) return c.map((x, j) => (j === i ? { ...x, qty: x.qty + 1 } : x));
+      if (i >= 0) return c.map((x, j) => { if (j !== i) return x; const next = { ...x, qty: x.qty + 1, price: u.price }; return { ...next, price: wholesalePrice(p, next) }; });
       return [...c, { productId: p.id, name: p.name, unit: u.name, factor: u.factor, qty: 1, price: u.price, hpp: productCost(s, p) * u.factor }];
     });
   };
   const tapProduct = (p: Product) => (p.units.length > 1 ? setUnitPick(p) : add(p));
-  const setQty = (i: number, d: number) => setCart((c) => c.map((x, j) => (j === i ? { ...x, qty: x.qty + d } : x)).filter((x) => x.qty > 0));
+  const setQty = (i: number, d: number) => setCart((c) => c.map((x, j) => { if (j !== i) return x; const p = products.find((p) => p.id === x.productId); const unit = p?.units.find((u) => u.name === x.unit); const next = { ...x, qty: x.qty + d, price: unit?.price ?? x.price }; return { ...next, price: p ? wholesalePrice(p, next) : next.price }; }).filter((x) => x.qty > 0));
   const total = cart.reduce((a, c) => a + c.qty * c.price, 0);
 
   const onScan = (e: React.FormEvent) => {
@@ -73,23 +84,28 @@ function Kasir() {
 
   const doHold = () => {
     if (!cart.length) return;
-    actions.hold(`Pembeli ${held.length + 1}`, cart); setCart([]); toast.success("Keranjang diparkir");
+    try { actions.hold(`Pembeli ${held.length + 1}`, cart); setCart([]); toast.success("Keranjang diparkir"); } catch (e) { toast.error(e instanceof Error ? e.message : "Parkir penuh"); }
   };
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => { if (e.key === "F2") { e.preventDefault(); scanRef.current?.focus(); } if (e.key === "F4") { e.preventDefault(); doHold(); } if (e.key === "F8") { e.preventDefault(); if (cart.length && employee && shift) setPay(true); } };
+    window.addEventListener("keydown", key); return () => window.removeEventListener("keydown", key);
+  }, [cart, employee, shift, held]);
 
   return (
-    <div className="flex h-dvh flex-col bg-background">
+    <div className="cashier-screen flex h-dvh flex-col bg-background">
       <AppBar>
-        <button onClick={() => (sessionStorage.getItem("owner") ? navigate({ to: "/pemilik" }) : setPin(true))}
+        <Button variant="secondary" onClick={() => setAccess(true)}>{employee ? s.employees.find((e) => e.id === employee)?.nickname : "Masuk Kasir"}</Button>
+        <Button onClick={() => (currentEmployee()?.role === "Pemilik" ? navigate({ to: "/pemilik" }) : setPin(true))}
           className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
           <KeyRound className="size-4" /> Pemilik
-        </button>
+        </Button>
       </AppBar>
       {!shift && (
-        <div className="bg-warning/25 px-4 py-2 text-center font-semibold">Laci kasir belum dibuka. Minta pemilik membuka shift agar uang laci tercatat.</div>
+        <div className="bg-warning/25 px-4 py-2 text-center font-semibold"><Button variant="ghost" onClick={() => setAccess(true)}>Buka Shift Utama</Button></div>
       )}
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[1fr_minmax(340px,40%)]">
         {/* KIRI: barang */}
-        <section className="flex min-h-0 flex-col gap-3 p-3 md:p-4">
+        <section className="cashier-products flex min-h-0 flex-col gap-3 p-3 md:p-4">
           <form onSubmit={onScan} className="flex gap-2">
             <div className="relative flex-1">
               <ScanBarcode className="absolute left-3 top-1/2 size-6 -translate-y-1/2 text-muted-foreground" />
@@ -158,15 +174,16 @@ function Kasir() {
             </div>
             <div className="grid grid-cols-3 gap-2">
               <button onClick={doHold} disabled={!cart.length} className="flex flex-col items-center rounded-xl bg-secondary py-3 font-bold disabled:opacity-40"><PauseCircle />Parkir</button>
-              <button onClick={() => setRetur(true)} className="flex flex-col items-center rounded-xl bg-secondary py-3 font-bold"><RotateCcw />Retur/Tukar</button>
-              <button onClick={() => cart.length && setPay(true)} disabled={!cart.length}
-                className="flex flex-col items-center rounded-xl bg-primary py-3 text-lg font-extrabold text-primary-foreground disabled:opacity-40"><Wallet />BAYAR</button>
+              <Button variant="secondary" onClick={() => { const role = currentEmployee()?.role; if (role === "Pemilik" || role === "Supervisor") setRetur(true); else toast.error("Retur membutuhkan persetujuan supervisor atau pemilik"); }} className="flex h-auto flex-col items-center rounded-xl py-3 font-bold"><RotateCcw />Retur/Tukar</Button>
+              <Button onClick={() => { if (!employee || !shift?.participants?.includes(employee)) setAccess(true); else if (cart.length) setPay(true); }} disabled={!cart.length}
+                className="flex h-auto flex-col items-center rounded-xl py-3 text-lg font-extrabold disabled:opacity-40"><Wallet />BAYAR</Button>
             </div>
           </div>
         </section>
       </div>
 
-      <UnitDialog product={unitPick} onClose={() => setUnitPick(null)} onPick={(i) => { add(unitPick!, i); setUnitPick(null); }} />
+      <EmployeeAccess open={access} onClose={() => { setAccess(false); setEmployee(currentEmployee()?.id ?? null); }} />
+      <UnitDialog product={unitPick} onClose={() => setUnitPick(null)} onPick={(i) => { if (unitPick) add(unitPick, i); setUnitPick(null); }} />
       <PayDialog open={pay} onOpenChange={setPay} cart={cart} total={total} onDone={() => { setCart([]); setPay(false); scanRef.current?.focus(); }} />
       <ReturDialog open={retur} onOpenChange={setRetur} />
       <Dialog open={holdList} onOpenChange={setHoldList}>
@@ -175,6 +192,7 @@ function Kasir() {
           {!held.length && <p className="text-muted-foreground">Belum ada keranjang yang diparkir.</p>}
           {held.map((h) => (
             <button key={h.id} onClick={() => {
+              if (cart.length && held.length >= 5) { toast.error("Parkir penuh; kosongkan keranjang dahulu"); return; }
               if (cart.length) actions.hold(`Pembeli ${held.length + 1}`, cart);
               setCart(h.items); actions.unhold(h.id); setHoldList(false);
             }} className="flex w-full items-center justify-between rounded-xl border p-4 text-left hover:border-primary">
@@ -212,30 +230,38 @@ const NOTES = [
   { v: 20000, label: "20rb", cls: "bg-cash-20 text-primary-foreground" },
   { v: 10000, label: "10rb", cls: "bg-cash-10 text-primary-foreground" },
   { v: 5000, label: "5rb", cls: "bg-cash-5 text-accent-foreground" },
+  { v: 2000, label: "2rb", cls: "bg-cash-pas text-primary-foreground" },
+  { v: 1000, label: "1rb", cls: "bg-secondary text-secondary-foreground" },
 ];
 
 function PayDialog({ open, onOpenChange, cart, total, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; cart: CartItem[]; total: number; onDone: () => void }) {
   const customers = useStore((s) => s.customers);
   const [paid, setPaid] = useState(0);
   const [adj, setAdj] = useState<{ v: number; note: string } | null>(null);
-  const [method, setMethod] = useState<"tunai" | "qris" | "kasbon">("tunai");
+  const [method, setMethod] = useState<"tunai" | "qris" | "kasbon" | "split">("tunai");
+  const [splitCash, setSplitCash] = useState(0);
+  const [splitOther, setSplitOther] = useState<"qris" | "kasbon">("qris");
   const [cust, setCust] = useState("");
   const [done, setDone] = useState<number | null>(null);
   const final = total + (adj?.v ?? 0);
   const change = paid - final;
   const remainder = total % 500;
 
-  const reset = () => { setPaid(0); setAdj(null); setMethod("tunai"); setCust(""); setDone(null); };
+  const reset = () => { setPaid(0); setAdj(null); setMethod("tunai"); setCust(""); setDone(null); setSplitCash(0); };
   const finish = (m: typeof method, paidAmt: number) => {
-    if (m === "kasbon") {
+    if (m === "kasbon" || (m === "split" && splitOther === "kasbon")) {
       const c = customers.find((x) => x.id === cust);
       if (!c) return toast.error("Pilih nama pelanggan dulu");
       const bal = customerBalance(getState(), c.id);
-      if (bal + final > c.limit) { buzz(); return toast.error(`Melebihi limit! Sisa limit ${c.name}: ${rp(c.limit - bal)}`); }
+      if (bal + (m === "split" ? final - splitCash : final) > c.limit) { buzz(); return toast.error(`Melebihi limit! Sisa limit ${c.name}: ${rp(c.limit - bal)}`); }
     }
-    actions.checkout({ items: cart, subtotal: total, adjust: adj?.v ?? 0, adjustNote: adj?.note, total: final, paid: paidAmt, change: Math.max(0, paidAmt - final), method: m, customerId: m === "kasbon" ? cust : undefined });
+    const payments: Payment[] = m === "split" ? [{ method: "tunai", amount: splitCash }, { method: splitOther, amount: final - splitCash }] : [{ method: m, amount: final }];
+    try { actions.checkout({ items: cart, subtotal: total, adjust: adj?.v ?? 0, adjustNote: adj?.note, total: final, paid: paidAmt, change: m === "tunai" ? Math.max(0, paidAmt - final) : 0, method: m, payments, customerId: m === "kasbon" || (m === "split" && splitOther === "kasbon") ? cust : undefined }); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Pembayaran gagal"); return; }
     chime();
-    setDone(Math.max(0, paidAmt - final));
+    const cashChange = m === "tunai" ? Math.max(0, paidAmt - final) : 0;
+    setDone(cashChange);
+    if ("speechSynthesis" in window && m === "tunai") { const speech = new SpeechSynthesisUtterance(`Kembalian ${cashChange} rupiah`); speech.lang = "id-ID"; window.speechSynthesis.speak(speech); }
   };
 
   return (
@@ -269,11 +295,12 @@ function PayDialog({ open, onOpenChange, cart, total, onDone }: { open: boolean;
                 <button onClick={() => setAdj(adj?.note === "Donasi" ? null : { v: 500 - remainder, note: "Donasi" })} className={cn("rounded-xl border-2 p-2 text-sm font-semibold", adj?.note === "Donasi" && "border-primary")}>🤲 Donasi<br />{rp(500 - remainder)}</button>
               </div>
             )}
-            <div className="grid grid-cols-3 gap-2">
-              {(["tunai", "qris", "kasbon"] as const).map((m) => (
-                <button key={m} onClick={() => setMethod(m)} className={cn("rounded-xl py-3 text-lg font-bold capitalize", method === m ? "bg-primary text-primary-foreground" : "bg-secondary")}>{m === "qris" ? "QRIS" : m}</button>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {(["tunai", "qris", "kasbon", "split"] as const).map((m) => (
+                <Button key={m} variant={method === m ? "default" : "secondary"} onClick={() => setMethod(m)} className="h-14 text-lg font-bold capitalize">{m === "qris" ? "QRIS" : m === "split" ? "Gabungan" : m}</Button>
               ))}
             </div>
+            {method === "split" && <div className="space-y-3"><label className="block font-semibold">Bagian Tunai<Input aria-label="Bagian Tunai" type="number" min={0} max={final} value={splitCash} onChange={(e) => setSplitCash(Number(e.target.value))} /></label><div className="flex gap-2">{(["qris", "kasbon"] as const).map((m) => <Button key={m} variant={splitOther === m ? "default" : "secondary"} onClick={() => setSplitOther(m)}>{m.toUpperCase()}</Button>)}</div><p>Sisa {splitOther.toUpperCase()}: <b>{rp(final - splitCash)}</b></p>{splitOther === "kasbon" && <select aria-label="Pelanggan kasbon" className="w-full rounded-md border bg-background p-3" value={cust} onChange={(e) => setCust(e.target.value)}><option value="">Pilih pelanggan</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}<Button className="w-full h-14 text-lg" disabled={splitCash < 0 || splitCash > final || (splitOther === "kasbon" && !cust)} onClick={() => finish("split", splitCash)}>SELESAI GABUNGAN</Button></div>}
             {method === "tunai" && (
               <>
                 <div className="grid grid-cols-3 gap-2">
