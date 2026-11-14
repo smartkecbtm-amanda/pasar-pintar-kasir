@@ -145,5 +145,38 @@
   font-family: var(--font-display);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
+}
+
+.dark {
+  --background: oklch(0.18 0.008 150);
+  --foreground: oklch(0.96 0.006 150);
+  --card: oklch(0.23 0.01 150);
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.74 0.14 155);
+  --primary-foreground: oklch(0.19 0.03 150);
+  --secondary: oklch(0.3 0.013 150);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.28 0.01 150);
+  --muted-foreground: oklch(0.76 0.014 150);
+  --border: oklch(0.4 0.015 150);
+  --input: var(--border);
+  --success: oklch(0.76 0.14 150);
+  --destructive: oklch(0.73 0.16 27);
+  --warning-foreground: oklch(0.95 0.04 80);
+  --ring: var(--primary);
+}
+.contrast {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.1 0 0);
+  --card: var(--background);
+  --card-foreground: var(--foreground);
+  --muted-foreground: oklch(0.3 0 0);
+  --border: oklch(0.2 0 0);
+}
+@media (max-width: 767px) {
+  .cashier-screen { height: auto; min-height: 100dvh; }
+  .cashier-products { max-height: 48dvh; min-height: 300px; }
 }

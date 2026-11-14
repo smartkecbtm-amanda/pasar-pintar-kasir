@@ -1,0 +1,11 @@
+# Fase 1 — Frontend lokal
+- [x] Pegawai, PIN mandiri, pembatasan peran simulasi lokal dan audit kasir.
+- [x] Restok pintar: ROP, hari stok, ABC, checklist pasar.
+- [x] Penasihat opsional berbasis analisis lokal, tanpa perubahan bisnis.
+- [x] Tandem satu laci antar-tab lokal dan rekonsiliasi tunggal diuji.
+- [x] Pembayaran gabungan, kedaluwarsa, ekspor, auto-grosir dan tema.
+- [x] PWA offline disiapkan dengan guard preview; sembilan pengujian lulus dan alur layar diuji.
+- [ ] Validasi offline pada aplikasi terbit — belum diterbitkan.
+- [ ] Tandem HP terpisah — membutuhkan transport sinkronisasi pada Fase 2.
+- [ ] AI terhubung — ditunda sampai Fase 2; sekarang heuristik lokal.
+- [ ] Sisa Fase 1 belum selesai: printer/kamera, opname/repacking, retur supplier, konsinyasi terintegrasi, otorisasi void dan audit pembulatan menyeluruh.
