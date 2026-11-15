@@ -8,4 +8,8 @@
 - [ ] Validasi offline pada aplikasi terbit — belum diterbitkan.
 - [ ] Tandem HP terpisah — membutuhkan transport sinkronisasi pada Fase 2.
 - [ ] AI terhubung — ditunda sampai Fase 2; sekarang heuristik lokal.
-- [ ] Sisa Fase 1 belum selesai: printer/kamera, opname/repacking, retur supplier, konsinyasi terintegrasi, otorisasi void dan audit pembulatan menyeluruh.
+- [ ] Printer ESC/POS Serial/Bluetooth dan kamera barcode.
+- [ ] Opname fisik, susut dan repacking curah dengan audit.
+- [ ] Retur supplier dan konsinyasi terhubung kasir.
+- [ ] Void berizin supervisor serta audit donasi/permen/diskon.
+- [ ] Jalankan seluruh tes dan verifikasi alur lokal melalui layar.
