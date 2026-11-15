@@ -5,7 +5,7 @@ export type Unit = { name: string; factor: number; price: number };
 export type Role = "Pemilik" | "Supervisor" | "Kasir";
 export type Employee = { id: string; name: string; nickname: string; phone: string; role: Role; active: boolean; pinHash: string };
 export type Payment = { method: "tunai" | "qris" | "kasbon"; amount: number };
-export type StockMove = { id: string; ts: number; productId: string; qty: number; reason: string; cashierId?: string; audit?: boolean; referenceId?: string; cost?: number };
+export type StockMove = { id: string; ts: number; productId: string; qty: number; reason: string; note?: string; cashierId?: string; audit?: boolean; referenceId?: string; cost?: number };
 export type Product = {
   id: string; name: string; emoji: string; category: "Curah" | "Sembako" | "Minuman" | "Rokok" | "Jajan" | "Digital" | "Paket";
   baseUnit: string; stock: number; hpp: number; units: Unit[]; minStock: number; quick?: boolean;
@@ -288,7 +288,7 @@ export const actions = {
       if (!pr || pr.digital || pr.bundle || pr.consignId) throw new Error("Barang tidak bisa diopname");
       const delta = counted - pr.stock;
       if (reason !== "Selisih Hitung" && delta > 0) throw new Error("Alasan ini hanya untuk stok berkurang");
-      return { products: s.products.map((p) => p.id === productId ? { ...p, stock: counted } : p), stockMoves: [...s.stockMoves, { id: uid(), ts: Date.now(), productId, qty: delta, cost: reason !== "Konsumsi Rumah Tangga" ? Math.max(0, -delta) * pr.hpp : 0, reason, cashierId: currentEmployee(s)?.id, audit: true }], prive: reason === "Konsumsi Rumah Tangga" ? [...s.prive, { id: uid(), ts: Date.now(), type: "barang", amount: -delta * pr.hpp, productId, qty: -delta, note }] : s.prive };
+      return { products: s.products.map((p) => p.id === productId ? { ...p, stock: counted } : p), stockMoves: [...s.stockMoves, { id: uid(), ts: Date.now(), productId, qty: delta, cost: reason !== "Konsumsi Rumah Tangga" ? Math.max(0, -delta) * pr.hpp : 0, reason, note, cashierId: currentEmployee(s)?.id, audit: true }], prive: reason === "Konsumsi Rumah Tangga" ? [...s.prive, { id: uid(), ts: Date.now(), type: "barang", amount: -delta * pr.hpp, productId, qty: -delta, note }] : s.prive };
     });
   },
   repack(sourceId: string, targetId: string, consumed: number, output: number, size: number) {

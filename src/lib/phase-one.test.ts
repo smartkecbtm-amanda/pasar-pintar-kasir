@@ -90,4 +90,12 @@ describe("Sisa Fase 1", () => {
     Object.defineProperty(navigator, "serial", { configurable: true, value: { requestPort: async () => ({ open: vi.fn(async () => {}), close, writable: { getWriter: () => ({ write, releaseLock }) } }) } });
     await connectPrinter("serial"); await printThermal("TES\n"); expect(write.mock.calls[0]?.[0]).toEqual(escPos("TES\n")); expect(releaseLock).toHaveBeenCalledOnce(); await disconnectPrinter(); expect(close).toHaveBeenCalledOnce();
   });
+  it("Bluetooth BLE menulis semua bytes dalam potongan 20 byte", async () => {
+    const chunks: number[] = [];
+    const disconnect = vi.fn();
+    Object.defineProperty(navigator, "bluetooth", { configurable: true, value: { requestDevice: async () => ({ addEventListener: vi.fn(), gatt: { connected: true, disconnect, connect: async () => ({ getPrimaryService: async () => ({ getCharacteristic: async () => ({ properties: { write: true, writeWithoutResponse: false }, writeValueWithResponse: async (bytes: Uint8Array) => { expect(bytes.length).toBeLessThanOrEqual(20); chunks.push(...bytes); } }) }) }) } }) } });
+    await connectPrinter("bluetooth"); await printThermal("NOTA TEST BLUETOOTH 58MM\nTOTAL 22000\n");
+    expect(chunks).toEqual([...escPos("NOTA TEST BLUETOOTH 58MM\nTOTAL 22000\n")]);
+    await disconnectPrinter(); expect(disconnect).toHaveBeenCalledOnce();
+  });
 });
