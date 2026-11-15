@@ -86,7 +86,7 @@ describe("Sisa Fase 1", () => {
     const bytes = escPos(text); expect([...bytes.slice(0, 2)]).toEqual([27, 64]); expect([...bytes.slice(-3)]).toEqual([29, 86, 0]);
   });
   it("Serial menulis bytes ESC/POS pada printer dan melepas writer", async () => {
-    const write = vi.fn(async () => {}); const releaseLock = vi.fn(); const close = vi.fn(async () => {});
+    const write = vi.fn(async (_bytes: Uint8Array) => {}); const releaseLock = vi.fn(); const close = vi.fn(async () => {});
     Object.defineProperty(navigator, "serial", { configurable: true, value: { requestPort: async () => ({ open: vi.fn(async () => {}), close, writable: { getWriter: () => ({ write, releaseLock }) } }) } });
     await connectPrinter("serial"); await printThermal("TES\n"); expect(write.mock.calls[0]?.[0]).toEqual(escPos("TES\n")); expect(releaseLock).toHaveBeenCalledOnce(); await disconnectPrinter(); expect(close).toHaveBeenCalledOnce();
   });
