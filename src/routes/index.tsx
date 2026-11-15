@@ -16,6 +16,7 @@ import { wholesalePrice } from "@/lib/operations";
 import { CameraScanner } from "@/components/pos/CameraScanner";
 import { PrinterPanel } from "@/components/pos/PrinterPanel";
 import { Transactions } from "@/components/pos/Transactions";
+import { Inventory } from "@/components/owner/Inventory";
 import { coinPlan, type CoinMode } from "@/lib/operations";
 import { receiptText } from "@/lib/receipt";
 import { printBrowser, printThermal, printerConnected } from "@/lib/printer";
@@ -199,7 +200,7 @@ function Kasir() {
       </div>
 
       <CameraScanner open={camera} onClose={() => setCamera(false)} onScan={(code) => { const p = products.find((p) => p.barcode === code); if (p) add(p); else toast.error(`Barcode ${code} belum terdaftar`); setCamera(false); }} />
-      <Dialog open={history} onOpenChange={setHistory}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>Nota Shift Aktif</DialogTitle></DialogHeader><Transactions /></DialogContent></Dialog>
+      <Dialog open={history} onOpenChange={setHistory}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>Nota Shift Aktif</DialogTitle></DialogHeader><Transactions />{currentEmployee()?.role !== "Kasir" && employee && <Inventory supervisorOnly />}</DialogContent></Dialog>
       <Dialog open={printer} onOpenChange={setPrinter}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>Printer Kasir</DialogTitle></DialogHeader><PrinterPanel /></DialogContent></Dialog>
       <EmployeeAccess open={access} onClose={() => { setAccess(false); setEmployee(currentEmployee()?.id ?? null); }} />
       <Dialog open={shiftPanel} onOpenChange={setShiftPanel}><DialogContent className="max-h-[90dvh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>Laci Bersama</DialogTitle></DialogHeader><ShiftTab /><Button variant="outline" onClick={() => { sessionStorage.removeItem("employee"); sessionStorage.removeItem("owner"); setEmployee(null); setShiftPanel(false); }}>Selesai Membantu / Keluar</Button></DialogContent></Dialog>
@@ -389,12 +390,12 @@ function ReturDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
         {recent.map((s) => (
           <div key={s.id} className="rounded-xl border p-3">
             <div className="mb-2 text-sm text-muted-foreground">{jam(s.ts)} · {rp(s.total)}</div>
-            {s.items.map((it) => (
+            {s.items.map((it, index) => (
               <div key={it.productId + it.unit} className="flex items-center justify-between gap-2 py-1">
                 <span className="font-semibold">{it.name} <span className="text-sm font-normal">({it.qty} {it.unit})</span></span>
                 <div className="flex gap-1">
-                  <button onClick={() => { actions.retur(it.productId, it.factor, it.price, `Retur ${it.name}`); chime(); toast.success(`Retur 1 ${it.unit} ${it.name}. Kembalikan ${rp(it.price)}`); }} className="rounded-lg bg-destructive/10 px-3 py-2 text-sm font-bold text-destructive">Retur 1</button>
-                  <button onClick={() => { actions.retur(it.productId, -it.factor, 0, ""); chime(); toast.success(`Tukar ${it.name} dengan yang baru — barang rusak dicatat keluar stok`); }} className="rounded-lg bg-secondary px-3 py-2 text-sm font-bold">Tukar</button>
+                  <Button variant="destructive" size="sm" onClick={() => { try { actions.returnSaleItem(s.id, index); chime(); toast.success(`Retur ${it.name} dicatat`); } catch (e) { toast.error(e instanceof Error ? e.message : "Gagal"); } }}>Retur 1</Button>
+                  <Button variant="secondary" size="sm" onClick={() => { try { actions.returnSaleItem(s.id, index, true); toast.success("Tukar barang dicatat"); } catch (e) { toast.error(e instanceof Error ? e.message : "Gagal"); } }}>Tukar</Button>
                 </div>
               </div>
             ))}

@@ -189,6 +189,10 @@ export const actions = {
       const payments = sale.payments ?? [{ method: sale.method === "split" ? "tunai" : sale.method, amount: sale.total }];
       validatePayments(s, sale.total, payments, sale.customerId);
       if (sale.method === "tunai" && sale.paid < sale.total) throw new Error("Uang diterima kurang");
+      for (const c of s.consigns) {
+        const qty = sale.items.filter((i) => i.productId === c.productId).reduce((a, i) => a + i.qty * i.factor, 0);
+        if (qty && (c.settled || qty > c.received - c.sold)) throw new Error("Stok titipan tidak cukup atau sudah diselesaikan");
+      }
        if ((sale.donation ?? 0) < 0 || (sale.donation ?? 0) > sale.total) throw new Error("Donasi tidak valid");
        const full: Sale = { ...sale, payments, id: uid(), ts: Date.now(), shiftId: sh.id, cashierId: employee.id, cashierName: employee.nickname, deviceId: deviceId() };
       const patch: Partial<State> = {
@@ -208,6 +212,14 @@ export const actions = {
   retur(productId: string, qtyBase: number, refund: number, note: string) {
     requireLocalRole(["Supervisor", "Pemilik"]);
     setState((s) => ({ products: deduct(s.products, [{ productId, qty: qtyBase }], 1), cash: refund ? addCash(s, -refund, "retur", note) : s.cash }));
+  },
+  returnSaleItem(saleId: string, index: number, exchange = false) {
+    requireLocalRole(["Supervisor", "Pemilik"]);
+    setState((s) => {
+      const sale = s.sales.find((x) => x.id === saleId); const item = sale?.items[index]; const sh = activeShift(s);
+      if (!sale || !item || !sh || sale.shiftId !== sh.id || sale.voidedAt || sale.method !== "tunai" || (sale.returned?.[index] ?? 0) + 1 > item.qty || s.products.find((p) => p.id === item.productId)?.consignId) throw new Error("Retur tidak tersedia atau jumlah terjual sudah dikembalikan");
+      return { sales: s.sales.map((x) => x.id === saleId ? { ...x, returned: { ...x.returned, [index]: (x.returned?.[index] ?? 0) + 1 } } : x), products: deduct(s.products, [{ productId: item.productId, qty: item.factor }], exchange ? -1 : 1), cash: exchange ? s.cash : addCash(s, -item.price, "retur", `Retur ${saleId}: ${item.name}`), stockMoves: [...s.stockMoves, { id: uid(), ts: Date.now(), productId: item.productId, qty: exchange ? -item.factor : item.factor, reason: exchange ? "Tukar barang rusak" : "Retur pelanggan", referenceId: saleId, cost: exchange ? item.hpp : 0, cashierId: currentEmployee(s)?.id }] };
+    });
   },
   hold(label: string, items: CartItem[]) { setState((s) => { if (s.held.length >= 5) throw new Error("Maksimal 5 keranjang diparkir"); return { held: [...s.held, { id: uid(), label, ts: Date.now(), items }] }; }); },
   unhold(id: string) { setState((s) => ({ held: s.held.filter((h) => h.id !== id) })); },
