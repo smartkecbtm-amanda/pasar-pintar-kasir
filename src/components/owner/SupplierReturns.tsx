@@ -1,0 +1,13 @@
+import { useState } from "react";
+import { toast } from "sonner";
+import { actions, useStore } from "@/lib/store";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Field, selectCls } from "./ui";
+import { rp } from "@/lib/format";
+export function SupplierReturns() {
+  const s = useStore((s) => s); const items = s.products.filter((p) => !p.digital && !p.bundle && !p.consignId);
+  const [pid, setPid] = useState(items[0]?.id ?? ""); const [supplier, setSupplier] = useState(s.suppliers[0]?.id ?? "");
+  const [qty, setQty] = useState("1"); const [amount, setAmount] = useState(""); const [payable, setPayable] = useState(""); const [note, setNote] = useState("");
+  return <section className="space-y-3 border-t pt-4 lg:col-span-2"><h3 className="text-xl font-bold">Retur ke Supplier</h3><div className="grid gap-3 sm:grid-cols-2"><Field label="Barang retur"><select className={selectCls} value={pid} onChange={(e) => setPid(e.target.value)}>{items.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.stock} {p.baseUnit})</option>)}</select></Field><Field label="Supplier retur"><select className={selectCls} value={supplier} onChange={(e) => { setSupplier(e.target.value); setPayable(""); }}>{s.suppliers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field><Field label="Jumlah satuan dasar"><Input type="number" min={0} step="any" value={qty} onChange={(e) => setQty(e.target.value)} /></Field><Field label="Nilai pengembalian"><Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} /></Field><Field label="Penyelesaian retur"><select className={selectCls} value={payable} onChange={(e) => setPayable(e.target.value)}><option value="">Uang tunai diterima</option>{s.payables.filter((p) => p.supplierId === supplier && p.amount > p.paid).map((p) => <option key={p.id} value={p.id}>Potong hutang: {p.note} · {rp(p.amount - p.paid)}</option>)}</select></Field><Field label="Alasan retur supplier"><Input value={note} onChange={(e) => setNote(e.target.value)} /></Field></div><Button disabled={!amount || !note.trim()} onClick={() => { try { actions.returnSupplier(pid, +qty, +amount, supplier, note, payable || undefined); toast.success("Retur supplier dicatat"); } catch (e) { toast.error(e instanceof Error ? e.message : "Retur gagal"); } }}>Simpan Retur Supplier</Button>{s.supplierReturns.slice().reverse().map((r) => <p key={r.id} className="border-b py-2 text-sm">{s.products.find((p) => p.id === r.productId)?.name} · {r.qty} · {rp(r.amount)} · {r.payableId ? "Potong hutang" : "Tunai"} · {r.note}</p>)}</section>;
+}
