@@ -13,7 +13,7 @@ export function expiryStatus(expiry: string | undefined, now = Date.now()) {
 export function restockRadar(s: State, now = Date.now()) {
   const physical = s.products.filter((p) => !p.digital && !p.bundle);
   const rows = physical.map((p) => {
-    const sales = s.sales.filter((x) => x.ts <= now);
+    const sales = s.sales.filter((x) => !x.voidedAt && x.ts <= now);
     const qty = sales.filter((x) => x.ts >= now - 7 * DAY).reduce((a, x) => a + x.items.filter((i) => i.productId === p.id).reduce((b, i) => b + i.qty * i.factor, 0), 0);
     const daily = qty / 7;
     const last = Math.max(p.createdAt ?? now - 31 * DAY, ...sales.filter((x) => x.items.some((i) => i.productId === p.id)).map((x) => x.ts));
@@ -38,4 +38,20 @@ export function businessAdvice(s: State, now = Date.now()) {
   const debts = s.ledger.reduce((a, x) => a + x.debit - x.credit, 0);
   const urgent = radar.filter((r) => r.reorder);
   return [`Modal barang yang tidak bergerak lebih dari 30 hari sekitar Rp ${Math.round(frozen).toLocaleString("id-ID")}. Pertimbangkan paket hemat sebelum belanja ulang.`, `Kasbon beredar Rp ${Math.round(debts).toLocaleString("id-ID")}. Ingatkan pembayaran dengan santun agar uang kulakan tersedia.`, `${urgent.length} barang mencapai waktu pesan kembali. Dahulukan barang kelas A dan periksa harga agen sebelum belanja.`];
+}
+
+export type CoinMode = "none" | "discount" | "donation" | "candy";
+export function coinPlan(subtotal: number, paid: number, mode: CoinMode, candyPrice = 500) {
+  if (![subtotal, paid, candyPrice].every(Number.isFinite) || subtotal < 0 || paid < 0 || candyPrice <= 0) throw new Error("Nominal tidak valid");
+  const discount = mode === "discount" ? subtotal % 100 : 0;
+  const available = Math.max(0, paid - subtotal);
+  const donation = mode === "donation" ? available % 100 : 0;
+  const candyQty = mode === "candy" ? Math.floor((available % 1000) / candyPrice) : 0;
+  const total = subtotal - discount + donation + candyQty * candyPrice;
+  return { discount, donation, candyQty, total, change: Math.max(0, paid - total) };
+}
+
+export function repackValues(sourceStock: number, sourceHpp: number, consumed: number, output: number, size: number) {
+  if (![sourceStock, sourceHpp, consumed, output, size].every(Number.isFinite) || consumed <= 0 || output <= 0 || !Number.isInteger(output) || size <= 0 || consumed > sourceStock || output * size > consumed + 1e-9) throw new Error("Jumlah repacking atau stok tidak valid");
+  return { loss: consumed - output * size, outputHpp: sourceHpp * size, lossCost: (consumed - output * size) * sourceHpp };
 }

@@ -35,3 +35,6 @@ use the editor.
 - Keep deterministic restock, expiry and wholesale calculations in `src/lib/operations.ts` so business rules can be tested independently from screens.
 - Shared-drawer simulations use one store shift and cross-tab storage events; never claim cross-device synchronization until a transport exists.
 - Offline app-shell caching uses vite-plugin-pwa generateSW with the single preview-safe registration wrapper in `src/lib/pwa.ts` to avoid stale editor previews.
+- Browser hardware adapters are invoked only from user actions or effects; ESC/POS output uses Serial or configurable BLE GATT with browser-print fallback because hardware support varies.
+- Local inventory, consignment and reversal mutations stay atomic in the store; receipt encoding and deterministic coin/repack calculations are separate pure helpers for testability.
+- Voids retain the original invoice and approver audit, reverse only an active-shift transaction once, and never switch the cashier identity because approval is not login.

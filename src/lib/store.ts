@@ -1,37 +1,39 @@
 import { useSyncExternalStore } from "react";
+import { repackValues } from "./operations";
 
 export type Unit = { name: string; factor: number; price: number };
 export type Role = "Pemilik" | "Supervisor" | "Kasir";
 export type Employee = { id: string; name: string; nickname: string; phone: string; role: Role; active: boolean; pinHash: string };
 export type Payment = { method: "tunai" | "qris" | "kasbon"; amount: number };
-export type StockMove = { id: string; ts: number; productId: string; qty: number; reason: string; cashierId?: string; audit?: boolean };
+export type StockMove = { id: string; ts: number; productId: string; qty: number; reason: string; note?: string; cashierId?: string; audit?: boolean; referenceId?: string; cost?: number };
 export type Product = {
   id: string; name: string; emoji: string; category: "Curah" | "Sembako" | "Minuman" | "Rokok" | "Jajan" | "Digital" | "Paket";
   baseUnit: string; stock: number; hpp: number; units: Unit[]; minStock: number; quick?: boolean;
    digital?: boolean; bundle?: { productId: string; qty: number }[]; barcode?: string;
-   expiry?: string; leadTime?: number; safetyStock?: number; market?: string; createdAt?: number;
+   expiry?: string; leadTime?: number; safetyStock?: number; market?: string; createdAt?: number; consignId?: string;
 };
 export type CartItem = { productId: string; name: string; unit: string; factor: number; qty: number; price: number; hpp: number };
 export type Sale = {
   id: string; ts: number; items: CartItem[]; subtotal: number; adjust: number; adjustNote?: string;
   total: number; paid: number; change: number; method: "tunai" | "qris" | "kasbon" | "split"; customerId?: string; shiftId?: string;
-  payments?: Payment[]; cashierId?: string; cashierName?: string; deviceId?: string;
+  payments?: Payment[]; cashierId?: string; cashierName?: string; deviceId?: string; donation?: number; coinMode?: string; voidedAt?: number; voidBy?: string; voidReason?: string; returned?: Record<string, number>;
 };
 export type Customer = { id: string; name: string; phone: string; limit: number; payday: number };
 export type Ledger = { id: string; customerId: string; ts: number; desc: string; debit: number; credit: number };
 export type Supplier = { id: string; name: string; phone: string };
 export type Payable = { id: string; supplierId: string; ts: number; due: number; amount: number; paid: number; note: string };
-export type Consign = { id: string; owner: string; phone: string; item: string; date: number; received: number; returned: number | null; sellPrice: number; ownerPrice: number; sold: number; settled: boolean };
+export type Consign = { id: string; owner: string; phone: string; item: string; date: number; received: number; returned: number | null; sellPrice: number; ownerPrice: number; sold: number; settled: boolean; productId?: string; damaged?: number; settledAt?: number };
 export type Prive = { id: string; ts: number; type: "tunai" | "barang"; amount: number; note: string; productId?: string; qty?: number };
 export type CashMove = { id: string; ts: number; shiftId?: string; amount: number; kind: string; note: string };
 export type Shift = { id: string; cashier: string; cashierId?: string; participants?: string[]; openedAt: number; opening: number; closedAt?: number; counted?: number; expected?: number };
 export type Held = { id: string; label: string; ts: number; items: CartItem[] };
 
 export type State = {
-  shopName: string; pin: string; products: Product[]; sales: Sale[]; customers: Customer[]; ledger: Ledger[];
+  printerWidth: 58 | 80; shopName: string; pin: string; products: Product[]; sales: Sale[]; customers: Customer[]; ledger: Ledger[];
   suppliers: Supplier[]; payables: Payable[]; consigns: Consign[]; prive: Prive[]; cash: CashMove[];
   shifts: Shift[]; held: Held[]; mockOffline: boolean; pendingSync: number;
   employees: Employee[]; stockMoves: StockMove[]; advisorEnabled: boolean; theme: "light" | "dark" | "contrast";
+  supplierReturns: { id: string; ts: number; supplierId: string; productId: string; qty: number; amount: number; payableId?: string; note: string }[];
   shopping: { productId: string; qty: number; cost: number; checked: boolean }[];
 };
 
@@ -83,7 +85,7 @@ export function makeSeed(): State {
     }
   }
   return {
-    shopName: "Warung Bu Sri", pin: "1234", products, sales,
+    printerWidth: 58, shopName: "Warung Bu Sri", pin: "1234", products, sales,
     customers: [
       { id: "c1", name: "Bu Darmi", phone: "6281234567801", limit: 300000, payday: 25 },
       { id: "c2", name: "Pak Joko (Ojol)", phone: "6281234567802", limit: 150000, payday: 1 },
@@ -113,7 +115,7 @@ export function makeSeed(): State {
       { id: "e1", name: "Bu Sri", nickname: "Sri", phone: "", role: "Pemilik", active: true, pinHash: "4fa49d4b73c49bf3139979b09e1a0195205aed09a7f097ff865f4e9fa928f913" },
       { id: "e2", name: "Siti", nickname: "Siti", phone: "", role: "Kasir", active: true, pinHash: "b1078fcc2f199432bd37e385c25b417b347ec5380257963b27546aab47c8d242" },
       { id: "e3", name: "Pak Budi", nickname: "Budi", phone: "", role: "Supervisor", active: true, pinHash: "b73c96f51a20fb5c4fd9a1ab27af83ca1115ad0a4ef7fed81ef123f81641e15e" },
-    ], stockMoves: [], shopping: [], advisorEnabled: false, theme: "light",
+    ], stockMoves: [], supplierReturns: [], shopping: [], advisorEnabled: false, theme: "light",
   };
 }
 
@@ -186,9 +188,16 @@ export const actions = {
       if (!sh || !employee || !sh.participants?.includes(employee.id)) throw new Error("Pilih pegawai dan gabung shift terlebih dahulu");
       const payments = sale.payments ?? [{ method: sale.method === "split" ? "tunai" : sale.method, amount: sale.total }];
       validatePayments(s, sale.total, payments, sale.customerId);
-      const full: Sale = { ...sale, payments, id: uid(), ts: Date.now(), shiftId: sh.id, cashierId: employee.id, cashierName: employee.nickname, deviceId: deviceId() };
+      if (sale.method === "tunai" && sale.paid < sale.total) throw new Error("Uang diterima kurang");
+      for (const c of s.consigns) {
+        const qty = sale.items.filter((i) => i.productId === c.productId).reduce((a, i) => a + i.qty * i.factor, 0);
+        if (qty && (c.settled || qty > c.received - c.sold)) throw new Error("Stok titipan tidak cukup atau sudah diselesaikan");
+      }
+       if ((sale.donation ?? 0) < 0 || (sale.donation ?? 0) > sale.total) throw new Error("Donasi tidak valid");
+       const full: Sale = { ...sale, payments, id: uid(), ts: Date.now(), shiftId: sh.id, cashierId: employee.id, cashierName: employee.nickname, deviceId: deviceId() };
       const patch: Partial<State> = {
         sales: [...s.sales, full],
+         consigns: s.consigns.map((c) => c.productId ? { ...c, sold: c.sold + sale.items.filter((i) => i.productId === c.productId).reduce((a, i) => a + i.qty * i.factor, 0) } : c),
         products: deduct(s.products, sale.items.map((i) => ({ productId: i.productId, qty: i.qty * i.factor }))),
       };
       const cash = payments.filter((p) => p.method === "tunai").reduce((a, p) => a + p.amount, 0);
@@ -196,13 +205,21 @@ export const actions = {
       if (cash) patch.cash = addCash(s, cash, "penjualan", `Penjualan · ${employee.nickname}`);
       if (debt && sale.customerId)
         patch.ledger = [...s.ledger, { id: uid(), customerId: sale.customerId, ts: Date.now(), desc: sale.items.map((i) => i.name).join(", ").slice(0, 60), debit: debt, credit: 0 }];
-      patch.stockMoves = [...s.stockMoves, ...sale.items.filter((i) => !s.products.find((p) => p.id === i.productId)?.digital).map((i) => ({ id: uid(), ts: Date.now(), productId: i.productId, qty: -i.qty * i.factor, reason: "Penjualan", cashierId: employee.id, audit: (patch.products?.find((p) => p.id === i.productId)?.stock ?? 0) < 0 }))];
+      patch.stockMoves = [...s.stockMoves, ...sale.items.filter((i) => !s.products.find((p) => p.id === i.productId)?.digital).map((i) => ({ id: uid(), ts: Date.now(), productId: i.productId, qty: -i.qty * i.factor, referenceId: full.id, reason: "Penjualan", cashierId: employee.id, audit: (patch.products?.find((p) => p.id === i.productId)?.stock ?? 0) < 0 }))];
       return patch;
     });
   },
   retur(productId: string, qtyBase: number, refund: number, note: string) {
     requireLocalRole(["Supervisor", "Pemilik"]);
     setState((s) => ({ products: deduct(s.products, [{ productId, qty: qtyBase }], 1), cash: refund ? addCash(s, -refund, "retur", note) : s.cash }));
+  },
+  returnSaleItem(saleId: string, index: number, exchange = false) {
+    requireLocalRole(["Supervisor", "Pemilik"]);
+    setState((s) => {
+      const sale = s.sales.find((x) => x.id === saleId); const item = sale?.items[index]; const sh = activeShift(s);
+      if (!sale || !item || !sh || sale.shiftId !== sh.id || sale.voidedAt || sale.method !== "tunai" || (sale.returned?.[index] ?? 0) + 1 > item.qty || s.products.find((p) => p.id === item.productId)?.consignId) throw new Error("Retur tidak tersedia atau jumlah terjual sudah dikembalikan");
+      return { sales: s.sales.map((x) => x.id === saleId ? { ...x, returned: { ...x.returned, [index]: (x.returned?.[index] ?? 0) + 1 } } : x), products: deduct(s.products, [{ productId: item.productId, qty: item.factor }], exchange ? -1 : 1), cash: exchange ? s.cash : addCash(s, -item.price, "retur", `Retur ${saleId}: ${item.name}`), stockMoves: [...s.stockMoves, { id: uid(), ts: Date.now(), productId: item.productId, qty: exchange ? -item.factor : item.factor, reason: exchange ? "Tukar barang rusak" : "Retur pelanggan", referenceId: saleId, cost: exchange ? item.hpp : 0, cashierId: currentEmployee(s)?.id }] };
+    });
   },
   hold(label: string, items: CartItem[]) { setState((s) => { if (s.held.length >= 5) throw new Error("Maksimal 5 keranjang diparkir"); return { held: [...s.held, { id: uid(), label, ts: Date.now(), items }] }; }); },
   unhold(id: string) { setState((s) => ({ held: s.held.filter((h) => h.id !== id) })); },
@@ -227,16 +244,26 @@ export const actions = {
     setState((s) => ({ payables: s.payables.map((x) => (x.id === id ? { ...x, paid: x.paid + amount } : x)), cash: addCash(s, -amount, "bayar hutang", "Bayar supplier") }));
   },
   addConsign(c: Omit<Consign, "id" | "date" | "returned" | "sold" | "settled">) {
-    setState((s) => ({ consigns: [...s.consigns, { ...c, id: uid(), date: Date.now(), returned: null, sold: 0, settled: false }] }));
-  },
-  settleConsign(id: string, returned: number) {
+    requireLocalRole(["Pemilik", "Supervisor"]);
+    if (!c.owner.trim() || !c.item.trim() || !Number.isInteger(c.received) || c.received <= 0 || !Number.isFinite(c.sellPrice) || !Number.isFinite(c.ownerPrice) || c.ownerPrice < 0 || c.sellPrice < c.ownerPrice) throw new Error("Data titipan tidak valid");
     setState((s) => {
-       const c = s.consigns.find((x) => x.id === id);
-       if (!c || c.settled) return {};
-      const sold = Math.max(0, c.received - returned);
+      const id = uid(); const productId = `titip-${id}`;
+      return { consigns: [...s.consigns, { ...c, id, productId, date: Date.now(), returned: null, sold: 0, settled: false }], products: [...s.products, p(productId, c.item, "🧺", "Jajan", "pcs", c.sellPrice, c.ownerPrice, c.received, 0, { consignId: id, quick: true })], stockMoves: [...s.stockMoves, { id: uid(), ts: Date.now(), productId, qty: c.received, reason: "Terima titipan", referenceId: id }] };
+    });
+  },
+  settleConsign(id: string, returned: number, damaged = 0) {
+    requireLocalRole(["Pemilik", "Supervisor"]);
+    setState((s) => {
+      const c = s.consigns.find((x) => x.id === id);
+      if (!c || c.settled) throw new Error("Titipan sudah selesai");
+      if (![returned, damaged].every((v) => Number.isInteger(v) && v >= 0) || returned + damaged > c.received) throw new Error("Jumlah sisa tidak valid");
+      if (c.productId && c.received - c.sold !== returned + damaged) throw new Error("Sisa dan rusak harus cocok dengan stok titipan belum terjual");
+      const sold = c.productId ? c.sold : c.received - returned - damaged;
       return {
-        consigns: s.consigns.map((x) => (x.id === id ? { ...x, returned, sold, settled: true } : x)),
-        cash: addCash({ ...s, cash: addCash(s, sold * c.sellPrice, "konsinyasi", `Jual titipan ${c.item}`) }, -sold * c.ownerPrice, "bagi hasil", `Setor ${c.owner}`),
+        consigns: s.consigns.map((x) => x.id === id ? { ...x, returned, damaged, sold, settled: true, settledAt: Date.now() } : x),
+        products: c.productId ? s.products.map((p) => p.id === c.productId ? { ...p, stock: 0, quick: false } : p) : s.products,
+        stockMoves: c.productId ? [...s.stockMoves, { id: uid(), ts: Date.now(), productId: c.productId, qty: -(returned + damaged), reason: "Retur titipan / rusak", referenceId: id }] : s.stockMoves,
+        cash: addCash(c.productId ? s : { ...s, cash: addCash(s, sold * c.sellPrice, "konsinyasi", `Jual titipan ${c.item}`) }, -sold * c.ownerPrice, "bagi hasil", `Setor ${c.owner}`),
       };
     });
   },
@@ -252,6 +279,50 @@ export const actions = {
     }));
   },
   addCash(amount: number, kind: string, note: string) { setState((s) => ({ cash: addCash(s, amount, kind, note) })); },
+  opname(productId: string, counted: number, reason: string, note: string) {
+    requireLocalRole(["Supervisor", "Pemilik"]);
+    if (!["Selisih Hitung", "Basi / Rusak / Hama", "Hilang", "Susut", "Konsumsi Rumah Tangga"].includes(reason) || !note.trim() || !Number.isFinite(counted) || counted < 0) throw new Error("Isi hasil hitung, alasan dan catatan");
+    if (reason === "Konsumsi Rumah Tangga") requireLocalRole(["Pemilik"]);
+    setState((s) => {
+      const pr = s.products.find((p) => p.id === productId);
+      if (!pr || pr.digital || pr.bundle || pr.consignId) throw new Error("Barang tidak bisa diopname");
+      const delta = counted - pr.stock;
+      if (reason !== "Selisih Hitung" && delta > 0) throw new Error("Alasan ini hanya untuk stok berkurang");
+      return { products: s.products.map((p) => p.id === productId ? { ...p, stock: counted } : p), stockMoves: [...s.stockMoves, { id: uid(), ts: Date.now(), productId, qty: delta, cost: reason !== "Konsumsi Rumah Tangga" ? Math.max(0, -delta) * pr.hpp : 0, reason, note, cashierId: currentEmployee(s)?.id, audit: true }], prive: reason === "Konsumsi Rumah Tangga" ? [...s.prive, { id: uid(), ts: Date.now(), type: "barang", amount: -delta * pr.hpp, productId, qty: -delta, note }] : s.prive };
+    });
+  },
+  repack(sourceId: string, targetId: string, consumed: number, output: number, size: number) {
+    requireLocalRole(["Pemilik"]);
+    setState((s) => {
+      const source = s.products.find((p) => p.id === sourceId); const target = s.products.find((p) => p.id === targetId);
+      if (!source || !target || sourceId === targetId || [source, target].some((p) => p.digital || p.bundle || p.consignId)) throw new Error("Pilih dua barang fisik berbeda");
+      const v = repackValues(source.stock, source.hpp, consumed, output, size); const ref = uid();
+      return { products: s.products.map((p) => p.id === sourceId ? { ...p, stock: p.stock - consumed } : p.id === targetId ? { ...p, stock: p.stock + output, hpp: movingAverage(p.stock, p.hpp, output, v.outputHpp) } : p), stockMoves: [...s.stockMoves, { id: uid(), ts: Date.now(), productId: sourceId, qty: -consumed, reason: "Repacking curah", referenceId: ref, cost: v.lossCost, cashierId: currentEmployee(s)?.id }, { id: uid(), ts: Date.now(), productId: targetId, qty: output, reason: "Hasil repacking", referenceId: ref }] };
+    });
+  },
+  returnSupplier(productId: string, qty: number, amount: number, supplierId: string, note: string, payableId?: string) {
+    requireLocalRole(["Pemilik", "Supervisor"]);
+    setState((s) => {
+      const p = s.products.find((p) => p.id === productId); const payable = s.payables.find((p) => p.id === payableId);
+      if (!p || p.digital || p.bundle || p.consignId || !Number.isFinite(qty) || qty <= 0 || qty > p.stock || !Number.isFinite(amount) || amount < 0 || !note.trim() || !s.suppliers.some((p) => p.id === supplierId)) throw new Error("Retur supplier tidak valid");
+      if (payableId && (!payable || payable.supplierId !== supplierId || amount > payable.amount - payable.paid)) throw new Error("Potongan melebihi sisa hutang supplier");
+      const id = uid();
+      return { products: deduct(s.products, [{ productId, qty }]), supplierReturns: [...s.supplierReturns, { id, ts: Date.now(), productId, qty, amount, supplierId, note, payableId }], payables: s.payables.map((p) => p.id === payableId ? { ...p, amount: p.amount - amount } : p), cash: payableId ? s.cash : addCash(s, amount, "retur supplier", note), stockMoves: [...s.stockMoves, { id: uid(), ts: Date.now(), productId, qty: -qty, reason: `Retur supplier: ${note}`, referenceId: id }] };
+    });
+  },
+  async voidSale(saleId: string, approverId: string, pin: string, reason: string) {
+    const hash = await hashPin(pin);
+    setState((s) => {
+      const approver = s.employees.find((e) => e.id === approverId && e.active && e.pinHash === hash && ["Supervisor", "Pemilik"].includes(e.role));
+      const sale = s.sales.find((x) => x.id === saleId); const sh = activeShift(s);
+      if (!approver) throw new Error("PIN supervisor/pemilik tidak valid");
+      if (!currentEmployee(s) || !sh || !sh.participants?.includes(currentEmployee(s)?.id ?? "") || !sale || sale.voidedAt || sale.shiftId !== sh.id || Object.values(sale.returned ?? {}).some((n) => n > 0) || !reason.trim()) throw new Error("Void hanya untuk transaksi utuh pada shift aktif dengan alasan");
+      if (sale.items.some((i) => s.consigns.some((c) => c.productId === i.productId && c.settled))) throw new Error("Titipan sudah diselesaikan");
+      const payments = sale.payments ?? [{ method: sale.method === "split" ? "tunai" : sale.method, amount: sale.total }];
+      const cash = payments.filter((p) => p.method === "tunai").reduce((a, p) => a + p.amount, 0); const debt = payments.filter((p) => p.method === "kasbon").reduce((a, p) => a + p.amount, 0);
+      return { sales: s.sales.map((x) => x.id === saleId ? { ...x, voidedAt: Date.now(), voidBy: approver.id, voidReason: reason } : x), products: deduct(s.products, sale.items.map((i) => ({ productId: i.productId, qty: i.qty * i.factor })), 1), consigns: s.consigns.map((c) => ({ ...c, sold: c.sold - sale.items.filter((i) => i.productId === c.productId).reduce((a, i) => a + i.qty * i.factor, 0) })), cash: cash ? addCash(s, -cash, "void", `Void ${sale.id}: ${reason}`) : s.cash, ledger: debt && sale.customerId ? [...s.ledger, { id: uid(), customerId: sale.customerId, ts: Date.now(), desc: `Void ${sale.id}`, debit: 0, credit: debt }] : s.ledger, stockMoves: [...s.stockMoves, ...sale.items.map((i) => ({ id: uid(), ts: Date.now(), productId: i.productId, qty: i.qty * i.factor, reason: "Void transaksi", referenceId: sale.id, cashierId: approver.id }))] };
+    });
+  },
   toggleOffline() { setState((s) => ({ mockOffline: !s.mockOffline })); },
   setPin(pin: string) { setState(() => ({ pin })); },
 };
