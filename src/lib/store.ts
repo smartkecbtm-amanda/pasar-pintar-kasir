@@ -29,7 +29,7 @@ export type Shift = { id: string; cashier: string; cashierId?: string; participa
 export type Held = { id: string; label: string; ts: number; items: CartItem[] };
 
 export type State = {
-  shopName: string; pin: string; products: Product[]; sales: Sale[]; customers: Customer[]; ledger: Ledger[];
+  printerWidth: 58 | 80; shopName: string; pin: string; products: Product[]; sales: Sale[]; customers: Customer[]; ledger: Ledger[];
   suppliers: Supplier[]; payables: Payable[]; consigns: Consign[]; prive: Prive[]; cash: CashMove[];
   shifts: Shift[]; held: Held[]; mockOffline: boolean; pendingSync: number;
   employees: Employee[]; stockMoves: StockMove[]; advisorEnabled: boolean; theme: "light" | "dark" | "contrast";
@@ -85,7 +85,7 @@ export function makeSeed(): State {
     }
   }
   return {
-    shopName: "Warung Bu Sri", pin: "1234", products, sales,
+    printerWidth: 58, shopName: "Warung Bu Sri", pin: "1234", products, sales,
     customers: [
       { id: "c1", name: "Bu Darmi", phone: "6281234567801", limit: 300000, payday: 25 },
       { id: "c2", name: "Pak Joko (Ojol)", phone: "6281234567802", limit: 150000, payday: 1 },

@@ -4,11 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { actions, movingAverage, useStore } from "@/lib/store";
 import { num, rp, tgl } from "@/lib/format";
+import { CameraScanner } from "@/components/pos/CameraScanner";
+import { SupplierReturns } from "./SupplierReturns";
 import { Card, Field, selectCls } from "./ui";
 
 export function Restock() {
   const s = useStore((x) => x);
-  const items = s.products.filter((p) => !p.digital && !p.bundle);
+  const items = s.products.filter((p) => !p.digital && !p.bundle && !p.consignId);
+  const [camera, setCamera] = useState(false);
   const [pid, setPid] = useState(items[0]?.id ?? "");
   const p = items.find((x) => x.id === pid);
   const [unitIdx, setUnitIdx] = useState(0);
@@ -34,7 +37,7 @@ export function Restock() {
           </div>
         )) : <p className="text-muted-foreground">Semua stok aman.</p>}
       </Card>
-      <Card title="📥 Terima Barang Kulakan">
+      <Card title="📥 Terima Barang Kulakan" action={<Button variant="outline" onClick={() => setCamera(true)}>Scan Kamera</Button>}>
         <div className="space-y-2">
           <Field label="Barang"><select className={selectCls} value={pid} onChange={(e) => { setPid(e.target.value); setUnitIdx(0); }}>{items.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
           <div className="grid grid-cols-3 gap-2">
@@ -59,6 +62,8 @@ export function Restock() {
           <Button className="w-full" disabled={!qtyBase || !total} onClick={() => { actions.receive(pid, qtyBase, total, tempo ? { supplierId: sup, days: Number(days) } : undefined); toast.success("Stok & HPP diperbarui"); setCost(""); }}>Simpan Penerimaan</Button>
         </div>
       </Card>
+      <CameraScanner open={camera} onClose={() => setCamera(false)} onScan={(code) => { const p = items.find((p) => p.barcode === code); if (p) { setPid(p.id); setUnitIdx(0); } else toast.error("Barcode belum terdaftar"); setCamera(false); }} />
+      <SupplierReturns />
       <Card title="📒 Hutang Supplier (Tempo)" className="lg:col-span-2">
         {s.payables.filter((x) => x.amount > x.paid).map((x) => {
           const sp = s.suppliers.find((y) => y.id === x.supplierId);

@@ -13,6 +13,13 @@ import { Button } from "@/components/ui/button";
 import { EmployeeAccess } from "@/components/pos/EmployeeAccess";
 import { currentEmployee, type Payment } from "@/lib/store";
 import { wholesalePrice } from "@/lib/operations";
+import { CameraScanner } from "@/components/pos/CameraScanner";
+import { PrinterPanel } from "@/components/pos/PrinterPanel";
+import { Transactions } from "@/components/pos/Transactions";
+import { coinPlan, type CoinMode } from "@/lib/operations";
+import { receiptText } from "@/lib/receipt";
+import { printBrowser, printThermal, printerConnected } from "@/lib/printer";
+import type { Sale } from "@/lib/store";
 import { ShiftTab } from "@/components/owner/Shift";
 
 export const Route = createFileRoute("/")({
@@ -35,6 +42,9 @@ function Kasir() {
   const s = useStore((s) => s);
   const [employee, setEmployee] = useState<string | null>(null);
   const [access, setAccess] = useState(false);
+  const [camera, setCamera] = useState(false);
+  const [history, setHistory] = useState(false);
+  const [printer, setPrinter] = useState(false);
   const [shiftPanel, setShiftPanel] = useState(false);
   useEffect(() => { setEmployee(currentEmployee()?.id ?? null); }, [s]);
   const products = useStore((s) => s.products);
@@ -52,7 +62,7 @@ function Kasir() {
   const scanRef = useRef<HTMLInputElement>(null);
 
   const list = useMemo(() => {
-    let l = products;
+    let l = products.filter((p) => !p.consignId || p.stock > 0);
     if (tab === "Curah") l = l.filter((p) => p.quick);
     if (tab === "Digital") l = l.filter((p) => p.digital);
     if (tab === "Semua") l = l.filter((p) => !p.digital);
@@ -96,6 +106,8 @@ function Kasir() {
   return (
     <div className="cashier-screen flex h-dvh flex-col bg-background">
       <AppBar>
+        <Button variant="secondary" onClick={() => setHistory(true)}>Nota</Button>
+        <Button variant="secondary" onClick={() => setPrinter(true)} aria-label="Printer">🖨️</Button>
         <Button variant="secondary" onClick={() => setAccess(true)}>{employee ? s.employees.find((e) => e.id === employee)?.nickname : "Masuk Kasir"}</Button>
         {employee && shift && <Button variant="secondary" onClick={() => setShiftPanel(true)}>Laci</Button>}
         <Button onClick={() => (currentEmployee()?.role === "Pemilik" ? navigate({ to: "/pemilik" }) : setPin(true))}
@@ -114,6 +126,7 @@ function Kasir() {
               <ScanBarcode className="absolute left-3 top-1/2 size-6 -translate-y-1/2 text-muted-foreground" />
               <Input ref={scanRef} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Scan barcode / ketik nama barang…" className="h-14 pl-12 text-lg" />
             </div>
+            <Button type="button" variant="secondary" className="h-14" aria-label="Scan kamera" onClick={() => setCamera(true)}><ScanBarcode /></Button>
           </form>
           <div className="flex gap-2">
             {TABS.map((t) => (
@@ -185,6 +198,9 @@ function Kasir() {
         </section>
       </div>
 
+      <CameraScanner open={camera} onClose={() => setCamera(false)} onScan={(code) => { const p = products.find((p) => p.barcode === code); if (p) add(p); else toast.error(`Barcode ${code} belum terdaftar`); setCamera(false); }} />
+      <Dialog open={history} onOpenChange={setHistory}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>Nota Shift Aktif</DialogTitle></DialogHeader><Transactions /></DialogContent></Dialog>
+      <Dialog open={printer} onOpenChange={setPrinter}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>Printer Kasir</DialogTitle></DialogHeader><PrinterPanel /></DialogContent></Dialog>
       <EmployeeAccess open={access} onClose={() => { setAccess(false); setEmployee(currentEmployee()?.id ?? null); }} />
       <Dialog open={shiftPanel} onOpenChange={setShiftPanel}><DialogContent className="max-h-[90dvh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>Laci Bersama</DialogTitle></DialogHeader><ShiftTab /><Button variant="outline" onClick={() => { sessionStorage.removeItem("employee"); sessionStorage.removeItem("owner"); setEmployee(null); setShiftPanel(false); }}>Selesai Membantu / Keluar</Button></DialogContent></Dialog>
       <UnitDialog product={unitPick} onClose={() => setUnitPick(null)} onPick={(i) => { if (unitPick) add(unitPick, i); setUnitPick(null); }} />
@@ -241,17 +257,20 @@ const NOTES = [
 function PayDialog({ open, onOpenChange, cart, total, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; cart: CartItem[]; total: number; onDone: () => void }) {
   const customers = useStore((s) => s.customers);
   const [paid, setPaid] = useState(0);
-  const [adj, setAdj] = useState<{ v: number; note: string } | null>(null);
+  const [coin, setCoin] = useState<CoinMode>("none");
+  const [receipt, setReceipt] = useState<Sale | null>(null);
+  const candy = useStore((s) => s.products.find((p) => p.id === "permen"));
   const [method, setMethod] = useState<"tunai" | "qris" | "kasbon" | "split">("tunai");
   const [splitCash, setSplitCash] = useState(0);
   const [splitOther, setSplitOther] = useState<"qris" | "kasbon">("qris");
   const [cust, setCust] = useState("");
   const [done, setDone] = useState<number | null>(null);
-  const final = total + (adj?.v ?? 0);
+  const plan = coinPlan(total, paid, method === "tunai" ? coin : "none", candy?.units[0]?.price ?? 500);
+  const final = plan.total;
   const change = paid - final;
-  const remainder = total % 500;
+  const adjustmentNote = coin === "discount" ? "Diskon koin" : coin === "donation" ? "Donasi kembalian" : coin === "candy" ? `Ganti ${plan.candyQty} permen` : undefined;
 
-  const reset = () => { setPaid(0); setAdj(null); setMethod("tunai"); setCust(""); setDone(null); setSplitCash(0); };
+  const reset = () => { setPaid(0); setCoin("none"); setReceipt(null); setMethod("tunai"); setCust(""); setDone(null); setSplitCash(0); };
   const finish = (m: typeof method, paidAmt: number) => {
     if (m === "kasbon" || (m === "split" && splitOther === "kasbon")) {
       const c = customers.find((x) => x.id === cust);
@@ -260,14 +279,25 @@ function PayDialog({ open, onOpenChange, cart, total, onDone }: { open: boolean;
       if (bal + (m === "split" ? final - splitCash : final) > c.limit) { buzz(); return toast.error(`Melebihi limit! Sisa limit ${c.name}: ${rp(c.limit - bal)}`); }
     }
     const payments: Payment[] = m === "split" ? [{ method: "tunai", amount: splitCash }, { method: splitOther, amount: final - splitCash }] : [{ method: m, amount: final }];
-    try { actions.checkout({ items: cart, subtotal: total, adjust: adj?.v ?? 0, adjustNote: adj?.note, total: final, paid: paidAmt, change: m === "tunai" ? Math.max(0, paidAmt - final) : 0, method: m, payments, customerId: m === "kasbon" || (m === "split" && splitOther === "kasbon") ? cust : undefined }); }
+    const checkoutItems = [...cart];
+    if (plan.candyQty && candy) {
+      if (candy.stock < plan.candyQty) return toast.error("Stok permen tidak cukup");
+      checkoutItems.push({ productId: candy.id, name: candy.name, unit: candy.baseUnit, factor: 1, qty: plan.candyQty, price: candy.units[0].price, hpp: candy.hpp });
+    }
+    try { actions.checkout({ items: checkoutItems, subtotal: total + plan.candyQty * (candy?.units[0]?.price ?? 0), adjust: -plan.discount + plan.donation, donation: plan.donation, coinMode: method === "tunai" ? coin : "none", adjustNote: adjustmentNote, total: final, paid: paidAmt, change: m === "tunai" ? Math.max(0, paidAmt - final) : 0, method: m, payments, customerId: m === "kasbon" || (m === "split" && splitOther === "kasbon") ? cust : undefined }); }
     catch (e) { toast.error(e instanceof Error ? e.message : "Pembayaran gagal"); return; }
+    setReceipt(getState().sales.at(-1) ?? null);
     chime();
     const cashChange = m === "tunai" ? Math.max(0, paidAmt - final) : 0;
     setDone(cashChange);
     if ("speechSynthesis" in window && m === "tunai") { const speech = new SpeechSynthesisUtterance(`Kembalian ${cashChange} rupiah`); speech.lang = "id-ID"; window.speechSynthesis.speak(speech); }
   };
 
+  async function print() {
+    if (!receipt) return;
+    try { const s = getState(); const text = receiptText(s.shopName, receipt, s.printerWidth); if (printerConnected()) { await printThermal(text); toast.success("Struk dikirim ke printer"); } else printBrowser(text); } catch (e) { toast.error(e instanceof Error ? e.message : "Cetak gagal"); }
+  }
+  useEffect(() => { if (!open || !receipt) return; const key = (e: KeyboardEvent) => { if (e.key === "Enter") { e.preventDefault(); void print(); } }; window.addEventListener("keydown", key); return () => window.removeEventListener("keydown", key); }, [open, receipt]);
   return (
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) { if (done !== null) onDone(); reset(); } }}>
       <DialogContent className="max-h-[95dvh] max-w-2xl overflow-y-auto">
@@ -278,7 +308,7 @@ function PayDialog({ open, onOpenChange, cart, total, onDone }: { open: boolean;
             {method === "tunai" && <><p className="mt-4 text-xl">Kembalian</p><p className="num-jumbo text-6xl text-primary">{rp(done)}</p></>}
             {method === "kasbon" && <p className="mt-4 text-xl">Dicatat di buku kasbon</p>}
             <div className="mt-6 grid grid-cols-2 gap-2">
-              <button onClick={() => toast.info("Struk dikirim ke printer (simulasi)")} className="rounded-xl bg-secondary py-4 text-lg font-bold">🖨️ Cetak Struk</button>
+              <Button onClick={() => void print()} variant="secondary" className="h-auto py-4 text-lg font-bold">🖨️ Cetak Struk</Button>
               <button onClick={() => { onDone(); reset(); }} className="rounded-xl bg-primary py-4 text-lg font-bold text-primary-foreground">Pembeli Baru</button>
             </div>
           </div>
@@ -288,20 +318,14 @@ function PayDialog({ open, onOpenChange, cart, total, onDone }: { open: boolean;
             <div className="flex items-end justify-between rounded-xl bg-muted p-4">
               <div>
                 <div className="text-lg">Harus dibayar</div>
-                {adj && <div className="text-sm text-muted-foreground">{adj.note} ({adj.v > 0 ? "+" : ""}{rp(adj.v)})</div>}
+                {adjustmentNote && method === "tunai" && <div className="text-sm text-muted-foreground">{adjustmentNote} · diskon {rp(plan.discount)} · donasi {rp(plan.donation)}</div>}
               </div>
               <div className="num-jumbo text-[36px] leading-none">{rp(final)}</div>
             </div>
-            {remainder > 0 && (
-              <div className="grid grid-cols-3 gap-2">
-                <button onClick={() => setAdj(adj?.note === "Bulatkan ke bawah" ? null : { v: -remainder, note: "Bulatkan ke bawah" })} className={cn("rounded-xl border-2 p-2 text-sm font-semibold", adj?.note === "Bulatkan ke bawah" && "border-primary")}>⬇️ Bulatkan<br />{rp(total - remainder)}</button>
-                <button onClick={() => setAdj(adj?.note === "Ganti permen" ? null : { v: 0, note: "Ganti permen" })} className={cn("rounded-xl border-2 p-2 text-sm font-semibold", adj?.note === "Ganti permen" && "border-primary")}>🍬 Kembalian koin<br />ganti permen</button>
-                <button onClick={() => setAdj(adj?.note === "Donasi" ? null : { v: 500 - remainder, note: "Donasi" })} className={cn("rounded-xl border-2 p-2 text-sm font-semibold", adj?.note === "Donasi" && "border-primary")}>🤲 Donasi<br />{rp(500 - remainder)}</button>
-              </div>
-            )}
+            {method === "tunai" && <div className="grid grid-cols-2 gap-2">{(["none", "discount", "candy", "donation"] as const).map((m) => <Button key={m} variant={coin === m ? "default" : "secondary"} onClick={() => setCoin(m)}>{m === "none" ? "Kembalian biasa" : m === "discount" ? `Diskon koin ${rp(total % 100)}` : m === "candy" ? `Permen (${plan.candyQty})` : `Donasi ${rp(Math.max(0, paid - total) % 100)}`}</Button>)}</div>}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {(["tunai", "qris", "kasbon", "split"] as const).map((m) => (
-                <Button key={m} variant={method === m ? "default" : "secondary"} onClick={() => setMethod(m)} className="h-14 text-lg font-bold capitalize">{m === "qris" ? "QRIS" : m === "split" ? "Gabungan" : m}</Button>
+                <Button key={m} variant={method === m ? "default" : "secondary"} onClick={() => { setMethod(m); setCoin("none"); }} className="h-14 text-lg font-bold capitalize">{m === "qris" ? "QRIS" : m === "split" ? "Gabungan" : m}</Button>
               ))}
             </div>
             {method === "split" && <div className="space-y-3"><label className="block font-semibold">Bagian Tunai<Input aria-label="Bagian Tunai" type="number" min={0} max={final} value={splitCash} onChange={(e) => setSplitCash(Number(e.target.value))} /></label><div className="flex gap-2">{(["qris", "kasbon"] as const).map((m) => <Button key={m} variant={splitOther === m ? "default" : "secondary"} onClick={() => setSplitOther(m)}>{m.toUpperCase()}</Button>)}</div><p>Sisa {splitOther.toUpperCase()}: <b>{rp(final - splitCash)}</b></p>{splitOther === "kasbon" && <select aria-label="Pelanggan kasbon" className="w-full rounded-md border bg-background p-3" value={cust} onChange={(e) => setCust(e.target.value)}><option value="">Pilih pelanggan</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}<Button className="w-full h-14 text-lg" disabled={splitCash < 0 || splitCash > final || (splitOther === "kasbon" && !cust)} onClick={() => finish("split", splitCash)}>SELESAI GABUNGAN</Button></div>}
@@ -356,7 +380,7 @@ function PayDialog({ open, onOpenChange, cart, total, onDone }: { open: boolean;
 
 function ReturDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const sales = useStore((s) => s.sales);
-  const recent = sales.filter((s) => s.method !== "kasbon").slice(-8).reverse();
+  const recent = sales.filter((s) => !s.voidedAt && s.method === "tunai").slice(-8).reverse();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90dvh] max-w-lg overflow-y-auto">

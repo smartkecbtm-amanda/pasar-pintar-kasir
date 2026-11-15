@@ -7,12 +7,13 @@ import { expiryStatus } from "@/lib/operations";
 
 const DAY = 86400000;
 export function dayStats(s: State, from: number, to: number) {
-  const sales = s.sales.filter((x) => x.ts >= from && x.ts < to);
-  const omzet = sales.reduce((a, x) => a + x.total, 0);
+  const sales = s.sales.filter((x) => !x.voidedAt && x.ts >= from && x.ts < to);
+  const omzet = sales.reduce((a, x) => a + x.total - (x.donation ?? 0), 0);
   const hpp = sales.reduce((a, x) => a + x.items.reduce((b, i) => b + i.hpp * i.qty, 0), 0);
-  const beban = -s.cash.filter((c) => c.kind === "beban" && c.ts >= from && c.ts < to).reduce((a, c) => a + c.amount, 0);
+  const losses = s.stockMoves.filter((m) => m.ts >= from && m.ts < to).reduce((a, m) => a + (m.cost ?? 0), 0);
+  const beban = losses - s.cash.filter((c) => c.kind === "beban" && c.ts >= from && c.ts < to).reduce((a, c) => a + c.amount, 0);
   const lain = s.cash.filter((c) => c.kind === "pemasukan" && c.ts >= from && c.ts < to).reduce((a, c) => a + c.amount, 0);
-  const consign = s.consigns.filter((c) => c.settled && c.date >= from && c.date < to).reduce((a, c) => a + c.sold * (c.sellPrice - c.ownerPrice), 0);
+  const consign = s.consigns.filter((c) => c.settled && !c.productId && (c.settledAt ?? c.date) >= from && (c.settledAt ?? c.date) < to).reduce((a, c) => a + c.sold * (c.sellPrice - c.ownerPrice), 0);
   const prive = s.prive.filter((p) => p.ts >= from && p.ts < to).reduce((a, p) => a + p.amount, 0);
   return { omzet, count: sales.length, gross: omzet - hpp, net: omzet - hpp - beban + lain + consign, beban, prive };
 }
@@ -24,18 +25,18 @@ export function Dashboard() {
   const days = Array.from({ length: 7 }, (_, i) => { const f = t0 - (6 - i) * DAY; const d = dayStats(s, f, f + DAY); return { hari: tgl(f), Omzet: d.omzet, Laba: d.net }; });
   const month = dayStats(s, t0 - 29 * DAY, t0 + DAY);
   const lastSold = new Map<string, number>();
-  s.sales.forEach((x) => x.items.forEach((i) => lastSold.set(i.productId, Math.max(lastSold.get(i.productId) ?? 0, x.ts))));
+  s.sales.filter((x) => !x.voidedAt).forEach((x) => x.items.forEach((i) => lastSold.set(i.productId, Math.max(lastSold.get(i.productId) ?? 0, x.ts))));
   const dead = s.products.filter((p) => !p.digital && !p.bundle && p.stock > 0 && (lastSold.get(p.id) ?? p.createdAt ?? 0) < Date.now() - 30 * DAY);
   const low = s.products.filter((p) => !p.digital && !p.bundle && p.stock <= p.minStock);
   const piutang = s.customers.reduce((a, c) => a + customerBalance(s, c.id), 0);
   const hutang = s.payables.reduce((a, p) => a + p.amount - p.paid, 0);
   const stockValue = s.products.reduce((a, p) => a + (p.digital || p.bundle ? 0 : p.stock * p.hpp), 0);
-  const best = [...s.products].map((p) => ({ p, q: s.sales.filter((x) => x.ts > t0 - 7 * DAY).reduce((a, x) => a + x.items.filter((i) => i.productId === p.id).reduce((b, i) => b + i.qty * i.factor, 0), 0) })).sort((a, b) => b.q - a.q).slice(0, 5);
+  const best = [...s.products].map((p) => ({ p, q: s.sales.filter((x) => !x.voidedAt && x.ts > t0 - 7 * DAY).reduce((a, x) => a + x.items.filter((i) => i.productId === p.id).reduce((b, i) => b + i.qty * i.factor, 0), 0) })).sort((a, b) => b.q - a.q).slice(0, 5);
 
   return (
     <div className="space-y-4">
       <AIBusinessAdvisorCard />
-      <div className="flex flex-wrap gap-4 border-b pb-3 text-sm">{(["tunai", "qris", "kasbon"] as const).map((method) => <span key={method}>{method.toUpperCase()} <b>{rp(s.sales.filter((x) => x.ts >= t0).reduce((a, x) => a + (x.payments?.filter((p) => p.method === method).reduce((b,p) => b+p.amount,0) ?? (x.method === method ? x.total : 0)), 0))}</b></span>)}</div>
+      <div className="flex flex-wrap gap-4 border-b pb-3 text-sm">{(["tunai", "qris", "kasbon"] as const).map((method) => <span key={method}>{method.toUpperCase()} <b>{rp(s.sales.filter((x) => !x.voidedAt && x.ts >= t0).reduce((a, x) => a + (x.payments?.filter((p) => p.method === method).reduce((b,p) => b+p.amount,0) ?? (x.method === method ? x.total : 0)), 0))}</b></span>)}</div>
       {s.products.filter((p) => { const e = expiryStatus(p.expiry); return e && e.level !== "safe"; }).map((p) => { const e = expiryStatus(p.expiry); return <div key={p.id} className={e?.level === "danger" ? "text-destructive font-bold" : "text-warning-foreground"}>{p.name} · {e && e.days < 0 ? "Sudah kedaluwarsa" : `Kedaluwarsa H-${e?.days}`}</div>; })}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Omzet hari ini" value={rp(today.omzet)} />
