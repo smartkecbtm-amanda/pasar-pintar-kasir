@@ -7,6 +7,10 @@ Fokus bangun frontend lengkap dengan mock data interaktif di browser (Local Stor
 2. Mode Manajemen Pemilik (PIN Switch): Buka/tutup shift kasir dengan rekonsiliasi uang laci, katalog produk multi-satuan (sachet/renteng/dus/kg) dengan kalkulator HPP moving average dan bundling, daftar kulakan otomatis dan hutang supplier tempo, manajemen barang titipan konsinyasi (terima pagi, retur sore, bagi hasil otomatis), CRM buku kasbon digital tetangga (rekening koran, limit kredit, tombol kirim WA), pencatatan prive tunai & prive barang, serta dashboard indikator omzet/laba bersih riil/dead stock.
 3. Arsitektur Frontend: PWA installable, responsive untuk tablet kasir 10 inci/desktop dan mobile smartphone pemilik, indikator online/offline mock.
 
+## Dokumentasi
+
+Blueprint, spesifikasi WMS, panduan alur, setup, dan roadmap lengkap ada di [`docs/`](docs/README.md). Status Fase 1 ringkas ada di [`roadmap.md`](roadmap.md).
+
 This project was built with [Lovable](https://lovable.dev).
 
 ## Build with Lovable
@@ -27,3 +31,16 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+## Menjalankan dan deploy
+
+```bash
+bun install && bun dev        # pengembangan lokal (atau npm install && npm run dev)
+bun test                      # tes
+bun run build                 # build produksi
+```
+
+- **Mode lokal** tidak butuh konfigurasi apa pun.
+- **Mode cloud**: salin `.env.example` menjadi `.env`, isi `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY`, lalu bangun ulang. Backend ada di zip/repo terpisah `pasar-pintar-backend` (lihat README-nya).
+- Deploy sebagai situs statis/SSR sesuai konfigurasi Lovable/Vite proyek ini. PWA, printer Bluetooth/USB/Serial, dan kamera hanya bekerja lewat **HTTPS** di Chrome/Edge.
+- Panduan uji coba: `docs/UJI-COBA.md`. Status pembangunan: `docs/STATUS-PEMBANGUNAN.md`.

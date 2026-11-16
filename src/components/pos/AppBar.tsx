@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { Wifi, WifiOff, Store } from "lucide-react";
-import { actions, useStore, activeShift } from "@/lib/store";
+import { actions, useStore, useSaveFailed, activeShift } from "@/lib/store";
+import { useCloudStatus } from "@/lib/cloud";
 import { cn } from "@/lib/utils";
 
 export function AppBar({ children }: { children?: ReactNode }) {
@@ -9,6 +10,8 @@ export function AppBar({ children }: { children?: ReactNode }) {
   const mock = useStore((s) => s.mockOffline);
   const pending = useStore((s) => s.pendingSync);
   const shift = useStore(activeShift);
+  const failed = useSaveFailed();
+  const cloud = useCloudStatus();
   const [net, setNet] = useState(true);
   useEffect(() => {
     const u = () => setNet(navigator.onLine);
@@ -24,6 +27,8 @@ export function AppBar({ children }: { children?: ReactNode }) {
       <span className={cn("rounded-full px-3 py-1 text-sm font-semibold", shift ? "bg-success/15 text-success" : "bg-warning/25 text-warning-foreground")}>
         {shift ? `Laci buka · ${shift.cashier}` : "Laci belum dibuka"}
       </span>
+      {cloud.enabled && <span className={`rounded-full px-3 py-1 text-sm font-bold ${cloud.online ? "bg-success/15 text-success" : "bg-warning/20"}`}>{cloud.online ? "☁ Tersinkron" : "☁ Offline"}{cloud.pending ? ` · ${cloud.pending} antre` : ""}</span>}
+      {failed && <span role="alert" className="rounded-full bg-destructive px-3 py-1 text-sm font-bold text-destructive-foreground">Penyimpanan penuh: data terbaru belum tersimpan!</span>}
       <div className="ml-auto flex items-center gap-2">
         {children}
         <button onClick={() => actions.toggleOffline()} title="Simulasi putus internet"

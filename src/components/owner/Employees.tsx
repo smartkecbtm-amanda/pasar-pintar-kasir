@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { saveEmployee, uid, useStore, type Employee, type Role } from "@/lib/store";
+import { actionsPlus } from "@/lib/store-extra";
 import { rp } from "@/lib/format";
 import { Field, selectCls } from "./ui";
 
@@ -13,7 +14,7 @@ export function Employees() {
   const [edit, setEdit] = useState<Employee | null>(null);
   const [pin, setPin] = useState("");
   return <div className="space-y-4"><div className="flex justify-between items-center"><h2 className="text-xl font-bold">Pegawai & Audit Laci</h2><Button onClick={() => { setPin(""); setEdit({ id: uid(), name: "", nickname: "", phone: "", role: "Kasir", active: true, pinHash: "" }); }}><Plus />Tambah Pegawai</Button></div>
-    {s.employees.map((e) => { const sales = s.sales.filter((x) => x.cashierId === e.id); const shifts = s.shifts.filter((x) => x.cashierId === e.id && x.closedAt); return <div key={e.id} className="flex flex-wrap items-center justify-between gap-3 border-b py-3"><div><b>{e.name}</b><p className="text-sm text-muted-foreground">{e.nickname} · {e.role} · {e.active ? "Aktif" : "Nonaktif"} · {e.phone || "—"}</p><p className="text-sm">{sales.length} transaksi · {rp(sales.reduce((a, x) => a + x.total, 0))} · Selisih laci tanggung jawab {rp(shifts.reduce((a, x) => a + (x.counted ?? 0) - (x.expected ?? 0), 0))}</p></div><Button variant="outline" size="icon" aria-label={`Edit ${e.name}`} onClick={() => { setPin(""); setEdit(e); }}><Pencil /></Button></div>; })}
+    {s.employees.map((e) => { const sales = s.sales.filter((x) => x.cashierId === e.id && !x.voided); const shifts = s.shifts.filter((x) => x.cashierId === e.id && x.closedAt); return <div key={e.id} className="flex flex-wrap items-center justify-between gap-3 border-b py-3"><div><b>{e.name}</b><p className="text-sm text-muted-foreground">{e.nickname} · {e.role} · {e.onLeave ? "Cuti" : e.active ? "Aktif" : "Nonaktif"} · {e.phone || "—"}</p><p className="text-sm">{sales.length} transaksi · {rp(sales.reduce((a, x) => a + x.total, 0))} · Selisih laci tanggung jawab {rp(shifts.reduce((a, x) => a + (x.counted ?? 0) - (x.expected ?? 0), 0))}</p></div><Button variant="outline" size="icon" aria-label={`Edit ${e.name}`} onClick={() => { setPin(""); setEdit(e); }}><Pencil /></Button><Button variant="outline" size="sm" onClick={() => { try { actionsPlus.setLeave(e.id, !e.onLeave); } catch (err) { toast.error(err instanceof Error ? err.message : "Gagal"); } }}>{e.onLeave ? "Kembali bertugas" : "Cuti"}</Button></div>; })}
     <Dialog open={!!edit} onOpenChange={(o) => !o && setEdit(null)}><DialogContent><DialogHeader><DialogTitle>Data Pegawai</DialogTitle></DialogHeader>{edit && <>
       <Field label="Nama lengkap"><Input aria-label="Nama lengkap" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
       <Field label="Nama panggilan di struk"><Input aria-label="Nama panggilan di struk" value={edit.nickname} onChange={(e) => setEdit({ ...edit, nickname: e.target.value })} /></Field>

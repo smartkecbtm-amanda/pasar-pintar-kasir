@@ -30,11 +30,13 @@ use the editor.
 <!-- LOVABLE:END -->
 
 ## Project rules
-- All app data lives in the browser via `src/lib/store.ts` (localStorage, useSyncExternalStore); backend not built yet by user request, so keep new features on this store.
-- Local employee PINs use browser SHA-256 fingerprints and per-tab identities solely for frontend simulation; production permissions require server validation because browser data is editable.
+- **Sumber kebenaran:** dokumen di `docs/` (blueprint, panduan alur, susunan pengembangan, `wms-build-spec`, `setup`, `roadmap`) adalah sumber kebenaran utama. Jangan merancang ulang aturan bisnis. Jika kode berbeda dari dokumen, dokumen yang benar. Jika dua dokumen bertentangan, jangan memilih sendiri: catat di `docs/STATUS-PEMBANGUNAN.md` dan tanyakan kepada pemilik proyek.
+- Status butir yang sudah dan belum dibangun dicatat di `docs/STATUS-PEMBANGUNAN.md`; perbarui berkas itu setiap kali sebuah butir selesai.
+- Implementasi dikerjakan per sprint atas perintah eksplisit pemilik proyek (`docs/susunan-pengembangan-pos-warung.md`, bagian 3).
+- Mode lokal: seluruh data ada di browser lewat `src/lib/store.ts` (state in-memory, salinan di localStorage dan snapshot IndexedDB). Mode cloud (opsional): `src/lib/cloud.ts` menyinkronkan data ke backend Supabase (repo/zip terpisah `pasar-pintar-backend`). Aplikasi harus tetap berjalan penuh tanpa cloud.
+- **Stok = jumlah mutasi.** Setiap perubahan stok wajib menulis `stockMoves` lewat `moveRows` (paket diuraikan per komponen) agar sinkronisasi antar-perangkat konsisten. Jangan mengubah `product.stock` tanpa mutasi.
+- Peristiwa sinkronisasi dibuat otomatis dari perbedaan state (`diffEvents` di `src/lib/cloud.ts`). Data baru yang perlu disinkronkan harus didaftarkan di `ENTITIES` dan di daftar `v_known` pada fungsi SQL `sync_push`.
+- PIN pegawai: mode lokal memakai SHA-256 di browser; mode cloud memverifikasi bcrypt di server (`verify_employee_pin`) dan memakai hash lokal hanya sebagai cadangan offline.
 - Keep deterministic restock, expiry and wholesale calculations in `src/lib/operations.ts` so business rules can be tested independently from screens.
-- Shared-drawer simulations use one store shift and cross-tab storage events; never claim cross-device synchronization until a transport exists.
+- Tandem lintas perangkat hanya berjalan lewat sinkronisasi cloud (polling berkala); tanpa cloud, tandem hanya antar-tab satu browser. Jangan menyebut sinkronisasi realtime sebelum memakai kanal Realtime.
 - Offline app-shell caching uses vite-plugin-pwa generateSW with the single preview-safe registration wrapper in `src/lib/pwa.ts` to avoid stale editor previews.
-- Browser hardware adapters are invoked only from user actions or effects; ESC/POS output uses Serial or configurable BLE GATT with browser-print fallback because hardware support varies.
-- Local inventory, consignment and reversal mutations stay atomic in the store; receipt encoding and deterministic coin/repack calculations are separate pure helpers for testability.
-- Voids retain the original invoice and approver audit, reverse only an active-shift transaction once, and never switch the cashier identity because approval is not login.

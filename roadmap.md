@@ -1,16 +1,8 @@
-# Fase 1 — Frontend lokal
-- [x] Pegawai, PIN mandiri, pembatasan peran simulasi lokal dan audit kasir.
-- [x] Restok pintar: ROP, hari stok, ABC, checklist pasar.
-- [x] Penasihat opsional berbasis analisis lokal, tanpa perubahan bisnis.
-- [x] Tandem satu laci antar-tab lokal dan rekonsiliasi tunggal diuji.
-- [x] Pembayaran gabungan, kedaluwarsa, ekspor, auto-grosir dan tema.
-- [x] PWA offline disiapkan dengan guard preview; sembilan pengujian lulus dan alur layar diuji.
-- [ ] Validasi offline pada aplikasi terbit — belum diterbitkan.
-- [ ] Tandem HP terpisah — membutuhkan transport sinkronisasi pada Fase 2.
-- [ ] AI terhubung — ditunda sampai Fase 2; sekarang heuristik lokal.
-- [x] Printer ESC/POS Serial/Bluetooth 58/80mm dan kamera barcode dengan input manual cadangan.
-- [x] Opname fisik, susut dan repacking curah dengan audit.
-- [x] Retur supplier dan konsinyasi terhubung kasir tanpa pencatatan omzet ganda.
-- [x] Void berizin supervisor serta audit donasi/permen/diskon.
-- [x] Seluruh tes otomatis dan alur lokal penjualan/void/opname/titipan/retur supplier diperiksa melalui layar desktop dan HP.
-- [ ] Uji cetak thermal dan scan kamera pada perangkat fisik — printer/kamera nyata tidak tersedia di sandbox.
+# Status ringkas (rincian di docs/STATUS-PEMBANGUNAN.md)
+- [x] Fase 1 Frontend lokal-first: kasir, WMS, kasbon, titipan, kulakan, repacking, opname, audit, laporan, PWA.
+- [x] Fase 2 Klien cloud: IndexedDB, outbox offline, sinkronisasi, PIN server, tandem lintas perangkat (kode lengkap; backend di zip terpisah).
+- [x] Fase 3 Perangkat: ESC/POS, laci kas, timbangan serial, kamera barcode (kode lengkap; belum diuji dengan perangkat fisik).
+- [x] Fase 4 Penasihat: analitik lokal dan AI cloud baca-saja (Edge Function).
+- [x] Fase 5 Multi-cabang, QRIS dinamis, PPOB (mock teruji; penyedia nyata belum diuji).
+- [ ] Verifikasi nyata: `bun test`, `bun run build`, coba di browser, SQL di Supabase, perangkat keras, sandbox QRIS/PPOB.
+- [ ] Belum dibuat: retur dengan barang pengganti berbeda, kanal Realtime (sekarang polling), rate limit Edge Functions.

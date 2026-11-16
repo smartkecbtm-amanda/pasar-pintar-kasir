@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatStock } from "@/lib/operations";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,7 @@ export function Products() {
               return (
                 <tr key={p.id} onClick={() => setEdit(p)} className="cursor-pointer border-t hover:bg-muted">
                   <td className="py-2 font-semibold">{p.emoji} {p.name} <span className="text-xs font-normal text-muted-foreground">{p.category}{p.bundle ? " · bundling" : ""}</span></td>
-                  <td className={!p.digital && bundleStock(s, p) <= p.minStock ? "font-bold text-destructive" : ""}>{p.digital ? "∞" : `${num(bundleStock(s, p))} ${p.baseUnit}`}</td>
+                  <td className={!p.digital && bundleStock(s, p) <= p.minStock ? "font-bold text-destructive" : ""}>{p.digital ? "∞" : p.bundle ? `${num(bundleStock(s, p))} ${p.baseUnit}` : formatStock({ stock: p.stock, baseUnit: p.baseUnit, units: p.units })}</td>
                   <td>{rp(cost)}</td>
                   <td>{p.units.map((u) => `${u.name} ${rp(u.price)}`).join(" · ")}</td>
                   <td className={m < 5 ? "text-destructive" : "text-success"}>{m.toFixed(0)}%</td>
@@ -47,6 +48,7 @@ export function Products() {
 function ProductDialog({ p: init, onClose }: { p: Product; onClose: () => void }) {
   const products = useStore((x) => x.products);
   const [p, setP] = useState<Product>(init);
+  const isExisting = products.some((x) => x.id === init.id);
   const set = (k: Partial<Product>) => setP({ ...p, ...k });
   const isBundle = !!p.bundle;
   return (
@@ -62,10 +64,12 @@ function ProductDialog({ p: init, onClose }: { p: Product; onClose: () => void }
           <Field label="Satuan dasar"><Input value={p.baseUnit} onChange={(e) => set({ baseUnit: e.target.value })} /></Field>
           <Field label="Stok minimum"><Input type="number" value={p.minStock} onChange={(e) => set({ minStock: Number(e.target.value) })} /></Field>
           <Field label="Barcode"><Input value={p.barcode ?? ""} onChange={(e) => set({ barcode: e.target.value })} /></Field>
+          <Field label="Foto produk"><div className="flex items-center gap-2">{p.photo ? <img src={p.photo} alt="" className="size-12 rounded-lg object-cover" /> : <span className="text-2xl">{p.emoji}</span>}<input type="file" accept="image/*" aria-label="Foto produk" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { try { set({ photo: await resizePhoto(f) }); } catch { toast.error("Foto tidak bisa dibaca"); } } }} />{p.photo && <Button type="button" variant="ghost" size="sm" onClick={() => set({ photo: undefined })}>Hapus</Button>}</div></Field>
+          <Field label="Kode cepat (2–3 digit)"><Input inputMode="numeric" maxLength={3} value={p.quickCode ?? ""} onChange={(e) => set({ quickCode: e.target.value.replace(/\D/g, "") })} /></Field>
         </div>
         {!isBundle && (
           <div className="grid grid-cols-2 gap-2">
-            <Field label={`Stok (${p.baseUnit})`}><Input type="number" value={p.stock} onChange={(e) => set({ stock: Number(e.target.value) })} /></Field>
+            <Field label={`Stok (${p.baseUnit})`}><Input type="number" value={p.stock} disabled={isExisting} onChange={(e) => set({ stock: Number(e.target.value) })} />{isExisting && <span className="text-xs text-muted-foreground">Ubah stok lewat tab Opname agar tercatat.</span>}</Field>
             <Field label="HPP per satuan dasar"><Input type="number" value={Math.round(p.hpp)} onChange={(e) => set({ hpp: Number(e.target.value) })} /></Field>
           </div>
         )}
@@ -113,4 +117,22 @@ function ProductDialog({ p: init, onClose }: { p: Product; onClose: () => void }
       </DialogContent>
     </Dialog>
   );
+}
+
+/** Perkecil foto ke maksimal 160 px (JPEG) agar hemat penyimpanan. */
+function resizePhoto(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, 160 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+      c.getContext("2d")?.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL("image/jpeg", 0.7));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("gambar tidak valid")); };
+    img.src = url;
+  });
 }

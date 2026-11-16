@@ -180,3 +180,12 @@
   .cashier-screen { height: auto; min-height: 100dvh; }
   .cashier-products { max-height: 48dvh; min-height: 300px; }
 }
+
+/* Struk: disembunyikan di layar, hanya tercetak saat window.print() */
+.print-only { display: none; }
+@media print {
+  @page { margin: 0; }
+  body > *:not(.print-only) { display: none !important; }
+  .print-only { display: block !important; width: 58mm; padding: 2mm; color: #000; background: #fff; font: 12px/1.35 ui-monospace, "Courier New", monospace; }
+  .print-only .rcpt-line { border-top: 1px dashed #000; margin: 4px 0; }
+}

@@ -14,7 +14,8 @@ import { Toaster } from "@/components/ui/sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { initializeOffline } from "@/lib/pwa";
-import { useStore } from "@/lib/store";
+import { hydrateFromIdb, useStore } from "@/lib/store";
+import { startCloudSync } from "@/lib/cloud";
 
 function NotFoundComponent() {
   return (
@@ -130,6 +131,8 @@ function RootComponent() {
   const theme = useStore((s) => s.theme);
   useEffect(() => { document.documentElement.classList.toggle("dark", theme === "dark"); document.documentElement.classList.toggle("contrast", theme === "contrast"); }, [theme]);
   useEffect(() => { void initializeOffline(); }, []);
+  // muat data IndexedDB (lebih baru dari localStorage), lalu mulai sinkronisasi cloud bila sudah masuk
+  useEffect(() => { hydrateFromIdb().then(() => startCloudSync()).catch(() => undefined); }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

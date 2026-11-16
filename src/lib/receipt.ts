@@ -1,15 +1,48 @@
 import type { Sale } from "./store";
+import { num, rp } from "./format";
 
-export function receiptText(shop: string, sale: Sale, width: 58 | 80 = 58) {
-  const columns = width === 58 ? 32 : 48;
-  const lines = [shop, ...(sale.voidedAt ? ["TRANSAKSI DIBATALKAN", sale.voidReason ?? ""] : []), `Nota ${sale.id}`, new Date(sale.ts).toLocaleString("id-ID"), `Kasir: ${sale.cashierName ?? "Kasir"}`, "-".repeat(columns)];
-  sale.items.forEach((i) => lines.push(i.name, `${i.qty} ${i.unit} x ${i.price} = ${Math.round(i.qty * i.price)}`));
-  lines.push("-".repeat(columns), `Subtotal: ${sale.subtotal}`, `Penyesuaian: ${sale.adjust}`, `Donasi: ${sale.donation ?? 0}`, `Total: ${sale.total}`, ...((sale.payments ?? []).map((p) => `${p.method.toUpperCase()}: ${p.amount}`)), `Diterima: ${sale.paid}`, `Kembalian: ${sale.change}`, sale.adjustNote ?? "", "Terima kasih");
-  return lines.flatMap((line) => line.match(new RegExp(`.{1,${columns}}`, "g")) ?? [""]).join("\n") + "\n\n\n";
+const METHOD: Record<string, string> = { tunai: "Tunai", qris: "QRIS", kasbon: "Kasbon", split: "Gabungan" };
+
+export function receiptLines(sale: Sale) {
+  return sale.items.map((i) => ({ name: i.name, detail: `${num(i.qty)} ${i.unit} x ${rp(i.price)}`, total: rp(i.qty * i.price) }));
 }
 
-export function escPos(text: string) {
-  // Printer default code pages support ASCII; normalize unsupported glyphs.
-  const ascii = text.normalize("NFKD").replace(/[^\x20-\x7e\n]/g, "?");
-  return new Uint8Array([27, 64, 27, 97, 0, ...new TextEncoder().encode(ascii), 29, 86, 0]);
+export function paymentLines(sale: Sale) {
+  const pays = sale.payments ?? [{ method: sale.method === "split" ? "tunai" : sale.method, amount: sale.total }];
+  return pays.map((p) => `${METHOD[p.method] ?? p.method}: ${rp(p.amount)}`);
+}
+
+/** Teks struk untuk dikirim lewat WhatsApp (struk digital). */
+export function receiptText(sale: Sale, shop: string): string {
+  const d = new Date(sale.ts);
+  const out = [
+    `*${shop}*`,
+    `${d.toLocaleDateString("id-ID")} ${d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} · Nota ${sale.id}`,
+    sale.cashierName ? `Kasir: ${sale.cashierName}` : "",
+    "",
+    ...receiptLines(sale).map((l) => `${l.name}\n  ${l.detail} = ${l.total}`),
+    "",
+    sale.adjust ? `${sale.adjustNote ?? "Penyesuaian"}: ${sale.adjust > 0 ? "+" : ""}${rp(sale.adjust)}` : "",
+    sale.manualDiscount ? `Diskon: -${rp(sale.manualDiscount)}` : "",
+    `*TOTAL ${rp(sale.total)}*`,
+    ...paymentLines(sale),
+    sale.method === "tunai" && sale.change > 0 ? `Kembalian: ${rp(sale.change)}` : "",
+    "",
+    "Terima kasih sudah belanja 🙏",
+  ];
+  return out.filter((l, i) => l !== "" || out[i - 1] !== "").join("\n").trim();
+}
+
+export type SettlementInput = { owner: string; item: string; received: number; sold: number; sisa: number; basi: number; ownerPrice: number; sellPrice: number; date: number };
+/** Bukti setor titipan untuk dicetak atau dikirim ke penitip. */
+export function settlementLines(c: SettlementInput, shop: string): string[] {
+  const d = new Date(c.date);
+  return [shop, "BUKTI SETOR TITIPAN", `${d.toLocaleDateString("id-ID")}`, `Penitip: ${c.owner}`, `Barang: ${c.item}`, "--------------------------------",
+    `Masuk   : ${num(c.received)}`, `Sisa    : ${num(c.sisa)}`, `Basi/retur: ${num(c.basi)}`, `Terjual : ${num(c.sold)}`, `Harga setor: ${rp(c.ownerPrice)}`,
+    "--------------------------------", `TOTAL SETOR ${rp(c.sold * c.ownerPrice)}`, `Komisi warung ${rp(c.sold * (c.sellPrice - c.ownerPrice))}`, "", "Terima kasih"];
+}
+export function transferLines(t: { id: string; ts: number; fromName: string; toName: string; note: string; items: { name: string; unit: string; qtyBase: number }[] }): string[] {
+  const d = new Date(t.ts);
+  return ["SURAT JALAN", `No ${t.id}`, `${d.toLocaleDateString("id-ID")}`, `Dari : ${t.fromName}`, `Ke   : ${t.toName}`, "--------------------------------",
+    ...t.items.map((i) => `${i.name}  ${num(i.qtyBase)} ${i.unit}`), "--------------------------------", t.note ? `Catatan: ${t.note}` : "", "", "Pengirim: ________   Penerima: ________"].filter((l, i, a) => l !== "" || a[i - 1] !== "");
 }
