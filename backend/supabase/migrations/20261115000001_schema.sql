@@ -4,14 +4,14 @@ create extension if not exists pgcrypto with schema extensions;
 create table public.stores (
   id uuid primary key default gen_random_uuid(),
   name text not null check (length(trim(name)) > 0),
-  owner_id uuid not null references auth.users(id) on delete restrict,
+  owner_id uuid not null,
   created_at timestamptz not null default now()
 );
 create index stores_owner_idx on public.stores(owner_id);
 
 create table public.store_members (
   store_id uuid not null references public.stores(id) on delete cascade,
-  user_id uuid not null references auth.users(id) on delete cascade,
+  user_id uuid not null,
   role text not null check (role in ('owner', 'device')),
   created_at timestamptz not null default now(),
   primary key (store_id, user_id)
