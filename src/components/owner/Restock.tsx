@@ -4,14 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { actions, movingAverage, useStore } from "@/lib/store";
 import { num, rp, tgl } from "@/lib/format";
-import { CameraScanner } from "@/components/pos/CameraScanner";
-import { SupplierReturns } from "./SupplierReturns";
+import { restockRadar } from "@/lib/operations";
 import { Card, Field, selectCls } from "./ui";
 
 export function Restock() {
   const s = useStore((x) => x);
-  const items = s.products.filter((p) => !p.digital && !p.bundle && !p.consignId);
-  const [camera, setCamera] = useState(false);
+  const items = s.products.filter((p) => !p.digital && !p.bundle);
   const [pid, setPid] = useState(items[0]?.id ?? "");
   const p = items.find((x) => x.id === pid);
   const [unitIdx, setUnitIdx] = useState(0);
@@ -24,20 +22,25 @@ export function Restock() {
   const qtyBase = (Number(qty) || 0) * (unit?.factor ?? 1);
   const total = Number(cost) || 0;
   const newHpp = p && qtyBase ? movingAverage(p.stock, p.hpp, qtyBase, total / qtyBase) : 0;
-  const restock = items.filter((x) => x.stock <= x.minStock).map((x) => ({ x, need: Math.ceil(x.minStock * 2 - x.stock) }));
-  const waList = encodeURIComponent(`Daftar kulakan ${s.shopName}:\n` + restock.map((r) => `- ${r.x.name}: ${r.need} ${r.x.baseUnit}`).join("\n"));
+  // Satu sumber logika restok: titik pesan ulang (ROP) di operations.ts, sama dengan tab Restok Pintar.
+  const restock = restockRadar(s).filter((r) => r.reorder && r.need > 0);
+  const waList = encodeURIComponent(`Daftar kulakan ${s.shopName}:\n` + restock.map((r) => `- ${r.p.name}: ${num(r.need / (r.pack?.factor ?? 1))} ${r.pack?.name ?? r.p.baseUnit}`).join("\n"));
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card title="🛒 Daftar Kulakan Otomatis" action={<a href={`https://wa.me/?text=${waList}`} target="_blank" rel="noreferrer"><Button size="sm" variant="outline">Kirim WA</Button></a>}>
-        {restock.length ? restock.map(({ x, need }) => (
-          <div key={x.id} className="flex items-center justify-between border-b py-2 text-sm">
-            <span>{x.emoji} <b>{x.name}</b> <span className="text-muted-foreground">sisa {num(x.stock)} / min {x.minStock}</span></span>
-            <span className="flex items-center gap-2">beli ±<b>{need} {x.baseUnit}</b><Button size="sm" variant="secondary" onClick={() => { setPid(x.id); setUnitIdx(0); setQty(String(need)); }}>Terima</Button></span>
-          </div>
-        )) : <p className="text-muted-foreground">Semua stok aman.</p>}
+        {restock.length ? restock.map(({ p: x, need, pack, rop }) => {
+          const factor = pack?.factor ?? 1;
+          const packIdx = Math.max(0, x.units.findIndex((u) => u.name === pack?.name));
+          return (
+            <div key={x.id} className="flex items-center justify-between border-b py-2 text-sm">
+              <span>{x.emoji} <b>{x.name}</b> <span className="text-muted-foreground">sisa {num(x.stock)} / titik pesan {num(Math.ceil(rop))}</span></span>
+              <span className="flex items-center gap-2">beli ±<b>{num(need / factor)} {pack?.name ?? x.baseUnit}</b><Button size="sm" variant="secondary" onClick={() => { setPid(x.id); setUnitIdx(packIdx); setQty(String(need / factor)); }}>Terima</Button></span>
+            </div>
+          );
+        }) : <p className="text-muted-foreground">Semua stok aman.</p>}
       </Card>
-      <Card title="📥 Terima Barang Kulakan" action={<Button variant="outline" onClick={() => setCamera(true)}>Scan Kamera</Button>}>
+      <Card title="📥 Terima Barang Kulakan">
         <div className="space-y-2">
           <Field label="Barang"><select className={selectCls} value={pid} onChange={(e) => { setPid(e.target.value); setUnitIdx(0); }}>{items.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
           <div className="grid grid-cols-3 gap-2">
@@ -62,8 +65,6 @@ export function Restock() {
           <Button className="w-full" disabled={!qtyBase || !total} onClick={() => { actions.receive(pid, qtyBase, total, tempo ? { supplierId: sup, days: Number(days) } : undefined); toast.success("Stok & HPP diperbarui"); setCost(""); }}>Simpan Penerimaan</Button>
         </div>
       </Card>
-      <CameraScanner open={camera} onClose={() => setCamera(false)} onScan={(code) => { const p = items.find((p) => p.barcode === code); if (p) { setPid(p.id); setUnitIdx(0); } else toast.error("Barcode belum terdaftar"); setCamera(false); }} />
-      <SupplierReturns />
       <Card title="📒 Hutang Supplier (Tempo)" className="lg:col-span-2">
         {s.payables.filter((x) => x.amount > x.paid).map((x) => {
           const sp = s.suppliers.find((y) => y.id === x.supplierId);

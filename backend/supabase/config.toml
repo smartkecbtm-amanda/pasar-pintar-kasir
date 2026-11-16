@@ -1,0 +1,23 @@
+# Konfigurasi Supabase CLI. Ganti project_id dengan ID proyek Anda atau jalankan `supabase link`.
+project_id = "pasar-pintar"
+
+[api]
+enabled = true
+schemas = ["public"]
+max_rows = 1000
+
+[auth]
+enabled = true
+enable_signup = true
+site_url = "http://localhost:5173"
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+otp_length = 6
+otp_expiry = 3600
+
+# Webhook QRIS dipanggil penyedia pembayaran tanpa login pengguna.
+[functions.qris-webhook]
+verify_jwt = false

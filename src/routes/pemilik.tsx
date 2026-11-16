@@ -16,8 +16,12 @@ import { Button } from "@/components/ui/button";
 import { Employees } from "@/components/owner/Employees";
 import { SmartRestock } from "@/components/owner/SmartRestock";
 import { Settings } from "@/components/owner/Settings";
-import { Inventory } from "@/components/owner/Inventory";
 import { Reports } from "@/components/owner/Reports";
+import { AuditLog, Opname } from "@/components/owner/StockAudit";
+import { Warehouse } from "@/components/owner/Warehouse";
+import { Services } from "@/components/owner/Services";
+import { Branches } from "@/components/owner/Branches";
+import { CloudDevices } from "@/components/owner/CloudDevices";
 
 export const Route = createFileRoute("/pemilik")({
   head: () => ({
@@ -35,8 +39,8 @@ export const Route = createFileRoute("/pemilik")({
 
 const TABS = [
   ["dash", "📊 Dashboard", Dashboard], ["shift", "🗄️ Shift & Laci", ShiftTab], ["produk", "📦 Produk", Products],
-  ["opname", "Opname & Repacking", Inventory], ["kulakan", "🛒 Kulakan", Restock], ["titip", "🧺 Titipan", Consign], ["kasbon", "📒 Kasbon", Kasbon], ["prive", "🏠 Prive & Kas", PriveTab],
-  ["radar", "Restok Pintar", SmartRestock], ["pegawai", "Pegawai", Employees], ["laporan", "Ekspor", Reports], ["settings", "Pengaturan", Settings],
+  ["kulakan", "🛒 Kulakan", Restock], ["titip", "🧺 Titipan", Consign], ["kasbon", "📒 Kasbon", Kasbon], ["prive", "🏠 Prive & Kas", PriveTab],
+  ["radar", "Restok Pintar", SmartRestock], ["gudang", "Gudang", Warehouse], ["opname", "Opname", Opname], ["layanan", "Layanan", Services], ["cabang", "Cabang", Branches], ["cloud", "Cloud & Perangkat", CloudDevices], ["audit", "Audit", AuditLog], ["pegawai", "Pegawai", Employees], ["laporan", "Ekspor", Reports], ["settings", "Pengaturan", Settings],
 ] as const;
 
 function Owner() {
