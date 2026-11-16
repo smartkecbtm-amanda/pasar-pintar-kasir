@@ -9,7 +9,7 @@ export type Row = { seq: number; entity: string; entity_id: string; data: any; d
 
 export function cloudBase(): Pick<CloudConfig, "url" | "anonKey"> | null {
   const env = ((import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {});
-  const url = env["VITE_SUPABASE_URL"]; const anonKey = env["VITE_SUPABASE_ANON_KEY"];
+  const url = env["VITE_SUPABASE_URL"]; const anonKey = env["VITE_SUPABASE_ANON_KEY"] ?? env["VITE_SUPABASE_PUBLISHABLE_KEY"];
   return url && anonKey ? { url: url.replace(/\/$/, ""), anonKey } : null;
 }
 export function cloudConfig(): CloudConfig | null {
